@@ -33,6 +33,8 @@ class RedBase extends Base {
     newHarvester();
     // 7 more harvesters to create
     brain[5].x = 7;
+    brain[5].y = 7;
+    brain[5].z = 3;
   }
 
   //
@@ -142,6 +144,18 @@ class RedExplorer extends Explorer {
   // > called at the creation of the agent
   //
   void setup() {
+    bain[0].x = -1;
+    bain[0].y = -1;
+    bain[0].z = -1;
+    bain[1].x = -1;
+    bain[1].y = -1;
+    bain[1].z = -1;
+    bain[2].x = -1;
+    bain[2].y = -1;
+    bain[2].z = -1;
+    bain[3].x = -1;
+    bain[3].y = -1;
+    bain[3].z = -1;
   }
 
   //
@@ -167,19 +181,18 @@ class RedExplorer extends Explorer {
 
     // tries to localize ennemy bases
     lookForEnnemyBase();
+    lookForBurgerArea();
     // inform harvesters about food sources
-    driveHarvesters();
+    //driveHarvesters();
     // inform rocket launchers about targets
-    driveRocketLaunchers();
-    // inform rocket launchers about targets
-    corruptEnemies();
+    //driveRocketLaunchers();
+    //baitEnemies();
 
     // clear the message queue
     flushMessages();
   }
   
-  void corruptEnemies() {
-
+  void baitEnemies() {
     ArrayList ennemies;
     PVector baitPos = ((Base)minDist(myBases)).pos;
 
@@ -307,8 +320,18 @@ class RedExplorer extends Explorer {
   // > ...and to communicate about this to other friend explorers
   //
   void lookForEnnemyBase() {
+    ArrayList bases = perceiveRobots(ennemy, BASE);
+
+    if(bases != null) {
+      for(int i = 0; i < 2; i++) {
+        Base base = (Base) bases.get(i);
+        brain[i].x = base.pos.x;
+        brain[i].y = base.pos.y;
+      }
+    }
+
     // look for an ennemy base
-    Base babe = (Base)oneOf(perceiveRobots(ennemy, BASE));
+    /*Base babe = (Base)oneOf(perceiveRobots(ennemy, BASE));
     if (babe != null) {
       // if one is seen, look for a friend explorer
       Explorer explo = (Explorer)oneOf(perceiveRobots(friend, EXPLORER));
@@ -320,6 +343,30 @@ class RedExplorer extends Explorer {
       if (basy != null)
         // if one is seen, send a message with the localized ennemy base
         informAboutTarget(basy, babe);
+    }*/
+  }
+
+  void lookForBurgerArea() {
+    ArrayList burgers = perceiveBurgers();
+
+    if(burgers != null) {
+      int memI = 1;
+      int memIMax = 3;
+
+      for(int i = 0; i < burgers.size() && memI <= memIMax; i++, memI++) {
+        // If brain space taken, use next
+        if(brain[memI].x != -1)
+          continue;
+
+        // Save burger position
+        Burger burger = (Burger) burgers.get(i);
+        brain[memI].x = burger.pos.x;
+        brain[memI].y = burger.pos.y;
+      }
+
+      // If brain full, go back to base
+      if(memI >= memIMax)
+        brain[4].x = 1;
     }
   }
 
