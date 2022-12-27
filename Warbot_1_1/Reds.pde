@@ -1,5 +1,16 @@
 ///////////////////////////////////////////////////////////////////////////
 //
+// New Messages
+//
+// 
+final int CONNEXION_LAUNCHER = 5;
+final int CONNEXION_HARVESTER = 6;
+final int CONFIRM_CONNEXION = 7;
+final int ABORT_CONNEXION = 8;
+final float[] EMPTY_ARGS = new float[0];
+
+///////////////////////////////////////////////////////////////////////////
+//
 // The code for the red team
 // ===========================
 //
@@ -42,7 +53,9 @@ class RedBase extends Base {
     // creates a new harvester
     newHarvester();
     // 7 more harvesters to create
-    brain[5].x = 7;
+    brain[5].x = 0;
+    brain[5].y = 1;
+    brain[5].z = 1;
   }
 
   //
@@ -68,7 +81,7 @@ class RedBase extends Base {
       // 3rd priority = creates explorers 
       if (newExplorer())
         brain[5].z--;
-    } else if (energy > 12000) {
+    } /*else if (energy > 12000) {
       // if no robot in the pipe and enough energy 
       if ((int)random(2) == 0)
         // creates a new harvester with 50% chance
@@ -79,7 +92,7 @@ class RedBase extends Base {
       else
         // creates a new explorer with 25% chance
         brain[5].z++;
-    }
+    }*/
 
     // creates new bullets and fafs if the stock is low and enought energy
     if ((bullets < 10) && (energy > 1000))
@@ -345,6 +358,8 @@ class RedHarvester extends Harvester {
   // > called at the creation of the agent
   //
   void setup() {
+    brain[3].x = -1;
+    brain[4].z = 0;
   }
 
   //
@@ -355,38 +370,43 @@ class RedHarvester extends Harvester {
   //
   void go() {
     // handle messages received
-    handleMessages();
+      handleMessages();
+    if(brain[4].z == 0){
+      // send message to search RocketLauncher to connect with
+      searchRocketLauncher();
+    }
+    else{
+      // check for the closest burger
+      Burger b = (Burger)minDist(perceiveBurgers());
+      if ((b != null) && (distance(b) <= 2))
+        // if one is found next to the robot, collect it
+        takeFood(b);
 
-    // check for the closest burger
-    Burger b = (Burger)minDist(perceiveBurgers());
-    if ((b != null) && (distance(b) <= 2))
-      // if one is found next to the robot, collect it
-      takeFood(b);
+      // if food to deposit or too few energy
+      if ((carryingFood > 200) || (energy < 100))
+        // time to go back to the base
+        brain[4].x = 1;
 
-    // if food to deposit or too few energy
-    if ((carryingFood > 200) || (energy < 100))
-      // time to go back to the base
-      brain[4].x = 1;
+      // if in "go back" state
+      if (brain[4].x == 1) {
+        // go back to the base
+        goBackToBase();
 
-    // if in "go back" state
-    if (brain[4].x == 1) {
-      // go back to the base
-      goBackToBase();
-
-      // if enough energy and food
-      if ((energy > 100) && (carryingFood > 100)) {
-        // check for closest base
-        Base bob = (Base)minDist(myBases);
-        if (bob != null) {
-          // if there is one and the harvester is in the sphere of perception of the base
-          if (distance(bob) < basePerception)
-            // plant one burger as a seed to produce new ones
-            plantSeed();
+        // if enough energy and food
+        if ((energy > 100) && (carryingFood > 100)) {
+          // check for closest base
+          Base bob = (Base)minDist(myBases);
+          if (bob != null) {
+            // if there is one and the harvester is in the sphere of perception of the base
+            if (distance(bob) < basePerception)
+              // plant one burger as a seed to produce new ones
+              plantSeed();
+          }
         }
-      }
-    } else
-      // if not in the "go back" state, explore and collect food
-      goAndEat();
+      } else
+        // if not in the "go back" state, explore and collect food
+        goAndEat();
+    }
   }
 
   //
@@ -517,11 +537,33 @@ class RedHarvester extends Harvester {
           // update the corresponding flag
           brain[4].y = 1;
         }
+      } // if "confirm connexion" message
+      else if(msg.type == CONFIRM_CONNEXION && brain[3].x == -1) {
+        //println("Confirm Connexion Harvester");
+        brain[3].x = msg.alice;
+        brain[4].z = 1;
+        sendMessage(msg.alice, CONFIRM_CONNEXION, EMPTY_ARGS);
+      }
+      else if(msg.type == CONFIRM_CONNEXION && brain[3].x != -1) {
+        //println("Concel Connexion Harvester");
+        sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
       }
     }
     // clear the message queue
     flushMessages();
   }
+
+  void searchRocketLauncher() {
+    ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
+
+    if(lauchers != null) {
+      for(int i = 0; i < lauchers.size(); i++) {
+        //println("Send connexion Harvester", (Robot)lauchers.get(i));
+        sendMessage((Robot)lauchers.get(i), CONNEXION_LAUNCHER, EMPTY_ARGS);
+      }
+    }
+  }
+
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -550,6 +592,8 @@ class RedRocketLauncher extends RocketLauncher {
   // > called at the creation of the agent
   //
   void setup() {
+    brain[3].x = -1;
+    brain[4].z = 0;
   }
 
   //
@@ -559,24 +603,30 @@ class RedRocketLauncher extends RocketLauncher {
   // > defines the behavior of the agent
   //
   void go() {
-    // if no energy or no bullets
-    if ((energy < 100) || (bullets == 0))
-      // go back to the base
-      brain[4].x = 1;
-
-    if (brain[4].x == 1) {
-      // if in "go back to base" mode
-      goBackToBase();
-    } else {
-      // try to find a target
-      selectTarget();
-      // if target identified
-      if (target())
-        // shoot on the target
-        launchBullet(towards(brain[0]));
-      else
-        // else explore randomly
-        randomMove(45);
+    // handle messages received
+    handleMessages();
+    if(brain[4].z != 0){
+      // if no energy or no bullets
+      if ((energy < 100) || (bullets == 0))
+        // go back to the base
+        brain[4].x = 1;
+  
+      if (brain[4].x == 1) {
+        // if in "go back to base" mode
+        goBackToBase();
+      } else {
+        // try to find a target
+        //selectTarget();
+        // if target identified
+        //if (target())
+          // shoot on the target
+          //launchBullet(towards(brain[0]));
+        //else {
+          Robot follow = game.getRobot((int)brain[3].x);
+          right(towards(follow));
+          forward(distance(follow));
+        //}
+      }
     }
   }
 
@@ -656,5 +706,44 @@ class RedRocketLauncher extends RocketLauncher {
     // if there is no obstacle ahead, move forward at full speed
     if (freeAhead(speed))
       forward(speed);
+  }
+
+  //
+  // handleMessages
+  // ==============
+  // > handle messages received
+  // > identify the closest localized burger
+  //
+  void handleMessages() {
+    Message msg;
+    // for all messages
+    for (int i=0; i<messages.size(); i++) {
+      // get next message
+      msg = messages.get(i);
+      //println(msg.type);
+
+      // if "connexion harvester" message
+      if (msg.type == CONNEXION_LAUNCHER){
+        if(brain[3].x == -1){
+          //println("Connexion Laucher");
+          brain[3].x = msg.alice;
+          sendMessage(msg.alice, CONFIRM_CONNEXION, EMPTY_ARGS);
+        }
+      }
+      else if (msg.type == CONFIRM_CONNEXION){
+        if(brain[3].x == msg.alice){
+          //println("Confirm Laucher");
+          brain[4].z = 1;
+        }
+      }
+      else if (msg.type == ABORT_CONNEXION){
+        if(brain[3].x == msg.alice){
+          //println("Annule Laucher");
+          brain[3].x = -1;
+        }
+      }
+    }
+    // clear the message queue
+    flushMessages();
   }
 }
