@@ -180,6 +180,11 @@ class RedBase extends Base {
     // for all messages
     for (int i=0; i<messages.size(); i++) {
       msg = messages.get(i);
+      
+      // Check message is from ally
+      Robot transmitter = game.getRobot(msg.alice);
+      if(transmitter != null && transmitter.colour != friend) continue;
+      
       if (msg.type == ASK_FOR_ENERGY) {
         // if the message is a request for energy
         if (energy > 1000 + msg.args[0]) {
@@ -693,6 +698,11 @@ class RedHarvester extends Harvester {
     for (int i=0; i<messages.size(); i++) {
       // get next message
       msg = messages.get(i);
+      
+      // Check message is from ally
+      Robot transmitter = game.getRobot(msg.alice);
+      if(transmitter != null && transmitter.colour != friend) continue;
+      
       // if "localized food" message
       if (msg.type == INFORM_ABOUT_FOOD) {
         // record the position of the burger
@@ -922,6 +932,10 @@ class RedRocketLauncher extends RocketLauncher {
       // get next message
       msg = messages.get(i);
       //println(msg.type);
+      
+      // Check message is from ally
+      Robot transmitter = game.getRobot(msg.alice);
+      if(transmitter != null && transmitter.colour != friend) continue;
 
       // if "connexion with harvester" message
       if (msg.type == CONNEXION_LAUNCHER){
