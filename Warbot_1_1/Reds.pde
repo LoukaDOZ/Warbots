@@ -536,6 +536,7 @@ class RedHarvester extends Harvester {
       handleMessages();
     if(brain[4].z == NO_ROLE){
       // send message to search RocketLauncher to connect with
+      goBackToBase();
       searchRocketLauncher();
     }
     else{
@@ -551,7 +552,7 @@ class RedHarvester extends Harvester {
         brain[4].x = 1;
 
       // Back to base if loose contact with rocket launcher
-      if(brain[4].z == HARVEST_ROLE && looseTeam())
+      if(brain[4].z != NO_ROLE && looseTeam())
         brain[4].x = 1;
 
       // if in "go back" state
@@ -601,6 +602,9 @@ class RedHarvester extends Harvester {
         dropWall();
 
       if (dist <= 2) {
+        if(looseTeam())
+          brain[4].z = NO_ROLE;
+
         // if next to the base, gives the food to the base
         giveFood(bob, carryingFood);
         if (energy < 500)
@@ -787,48 +791,46 @@ class RedRocketLauncher extends RocketLauncher {
   void go() {
     // handle messages received
     handleMessages();
-    if(brain[4].z != NO_ROLE){
-      // if no energy or no bullets
-      if ((energy < 100) || (bullets == 0))
-        // go back to the base
-        brain[4].x = 1;
+    // if no energy or no bullets
+    if ((energy < 100) || (bullets == 0))
+      // go back to the base
+      brain[4].x = 1;
 
-      // Back to base if loose contact with :
-      // - harvester if HARVEST_ROLE
-      // - base if DEFEND_ROLE
-      if(looseTeam())
-        brain[4].x = 1;
-  
-      if (brain[4].x == 1) {
-        // if in "go back to base" mode
-        goBackToBase();
-      } else {
-        // try to find a target
-        selectTarget();
-        
-        // Follow harvester
-        if(brain[4].z == HARVEST_ROLE) {
-          heading = brain[3].y;
-          forward(brain[3].z);
+    // Back to base if loose contact with :
+    // - harvester if HARVEST_ROLE
+    // - base if DEFEND_ROLE
+    if(brain[4].z != NO_ROLE && looseTeam())
+      brain[4].x = 1;
 
-          // if target identified
-          if (target())
-            // shoot on the target
-            launchBullet(towards(brain[0]));
-        } else if(brain[4].z == DEFEND_ROLE) {
-          // if target identified
-          if (target()) {
-            // Follow the target
-            if(distance(brain[0]) > 2) {
-              right(towards(brain[0]));
-              forward(speed);
-            }
-            // shoot on the target
-            launchBullet(towards(brain[0]));
-          } else {
-            // Move randomly in base
-            randomMove(90f);
+    if (brain[4].x == 1) {
+      // if in "go back to base" mode
+      goBackToBase();
+    } else {
+      // try to find a target
+      selectTarget();
+      
+      // Follow harvester
+      if(brain[4].z == HARVEST_ROLE) {
+        heading = brain[3].y;
+        forward(brain[3].z);
+
+        // if target identified
+        if (target())
+          // shoot on the target
+          launchBullet(towards(brain[0]));
+      } else if(brain[4].z == DEFEND_ROLE || brain[4].z == NO_ROLE) {
+        // if target identified
+        if (target()) {
+          // Follow the target
+          if(distance(brain[0]) > 2) {
+            right(towards(brain[0]));
+            forward(speed);
           }
+          // shoot on the target
+          launchBullet(towards(brain[0]));
+        } else {
+          // Move randomly in base
+          randomMove(90f);
         }
       }
     }
@@ -836,6 +838,7 @@ class RedRocketLauncher extends RocketLauncher {
 
   boolean looseTeam() {
     Robot teamate = game.getRobot((int) brain[3].x);
+    if(brain[4].z == DEFEND_ROLE) println(teamate);
 
     return teamate == null || distance(teamate) > messageRange;
   }
@@ -887,6 +890,9 @@ class RedRocketLauncher extends RocketLauncher {
       float dist = distance(bob);
 
       if (dist <= 2) {
+        if(looseTeam())
+          brain[4].z = NO_ROLE;
+
         // if next to the base
         if (energy < 500)
           // if energy low, ask for some energy
