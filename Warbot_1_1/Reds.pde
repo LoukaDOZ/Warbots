@@ -63,10 +63,10 @@ class RedBase extends Base {
     brain[0].z = -1;
 
     // creates a new harvester
-    //newHarvester();
+    newHarvester();
     // 7 more harvesters to create
-    brain[5].x = 2;
-    brain[5].y = 6;
+    brain[5].x = 0;
+    brain[5].y = 2;
     brain[5].z = 0;
   }
 
@@ -213,10 +213,23 @@ class RedBase extends Base {
     return -1;
   }
 
-  void setDefender(float id) {
-    if (brain[0].x == -1) brain[0].x = id;
-    else if (brain[0].y == -1) brain[0].y = id;
-    else if (brain[0].z == -1) brain[0].z = id;
+  int setDefender(float id) {
+    if (brain[0].x == -1) {
+      brain[0].x = id;
+      return 0;
+    }
+
+    if (brain[0].y == -1) {
+      brain[0].y = id;
+      return 1;
+    }
+
+    if (brain[0].z == -1) {
+      brain[0].z = id;
+      return 2;
+    }
+    
+    return -1;
   }
 }
 
@@ -500,7 +513,7 @@ class RedHarvester extends Harvester {
         brain[4].x = 1;
 
       // Back to base if loose contact with rocket launcher
-      if(seeTeam())
+      if(brain[4].z == HARVEST_ROLE && looseTeam())
         brain[4].x = 1;
 
       // if in "go back" state
@@ -528,7 +541,7 @@ class RedHarvester extends Harvester {
     }
   }
 
-  boolean seeTeam() {
+  boolean looseTeam() {
     Robot teamate = game.getRobot((int) brain[3].x);
 
     return teamate == null || distance(teamate) > messageRange;
@@ -737,8 +750,10 @@ class RedRocketLauncher extends RocketLauncher {
         // go back to the base
         brain[4].x = 1;
 
-      // Back to base if loose contact with harvester
-      if(seeTeam())
+      // Back to base if loose contact with :
+      // - harvester if HARVEST_ROLE
+      // - base if DEFEND_ROLE
+      if(looseTeam())
         brain[4].x = 1;
   
       if (brain[4].x == 1) {
@@ -747,21 +762,36 @@ class RedRocketLauncher extends RocketLauncher {
       } else {
         // try to find a target
         selectTarget();
-        // if target identified
-        if (target())
-          // shoot on the target
-          launchBullet(towards(brain[0]));
         
         // Follow harvester
         if(brain[4].z == HARVEST_ROLE) {
           heading = brain[3].y;
           forward(brain[3].z);
+
+          // if target identified
+          if (target())
+            // shoot on the target
+            launchBullet(towards(brain[0]));
+        } else if(brain[4].z == DEFEND_ROLE) {
+          // if target identified
+          if (target()) {
+            // Follow the target
+            if(distance(brain[0]) > 2) {
+              right(towards(brain[0]));
+              forward(speed);
+            }
+            // shoot on the target
+            launchBullet(towards(brain[0]));
+          } else {
+            // Move randomly in base
+            randomMove(90f);
+          }
         }
       }
     }
   }
 
-  boolean seeTeam() {
+  boolean looseTeam() {
     Robot teamate = game.getRobot((int) brain[3].x);
 
     return teamate == null || distance(teamate) > messageRange;
