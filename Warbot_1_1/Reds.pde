@@ -10,6 +10,7 @@ final int ABORT_CONNEXION = 8;
 final int BACK_TO_BASE = 9;
 final int UPDATE_DIRECTION = 10;
 final int HEART_BEAT = 11;
+final int ATTACK_TARGET = 12;
 
 final float NO_ROLE = 0f;
 final float HARVEST_ROLE = 1f;
@@ -63,9 +64,9 @@ class RedBase extends Base {
     brain[0].z = -1;
 
     // creates a new harvester
-    newHarvester();
+    newExplorer();
     // 7 more harvesters to create
-    brain[5].x = 0;
+    brain[5].x = 2;
     brain[5].y = 2;
     brain[5].z = 0;
   }
@@ -84,6 +85,10 @@ class RedBase extends Base {
 
     if(needDefender())
       searchRocketLauncher();
+
+    // UNUSED
+    // Defend if ennemy is in base
+    //driveDefenders();
 
     // creates new robots depending on energy and the state of brain[5]
     if ((brain[5].x > 0) && (energy >= 1000 + harvesterCost)) {
@@ -136,6 +141,34 @@ class RedBase extends Base {
       }
     }
   }
+
+  // UNUSED
+  /*void driveDefenders() {
+    Robot target = null;
+
+    // Search ennemy
+    ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
+    if(robots != null && robots.size() > 0)
+      target = (Robot) robots.get(0);
+    else {
+      robots = perceiveRobots(ennemy, HARVESTER);
+      if(robots != null && robots.size() > 0)
+        target = (Robot) robots.get(0);
+      else {
+        robots = perceiveRobots(ennemy, EXPLORER);
+        if(robots != null && robots.size() > 0)
+          target = (Robot) robots.get(0);
+      }
+    }
+
+    // Ennemy found
+    if(target != null) {
+      float[] args = new float[]{target.pos.x, target.pos.y};
+      if(brain[0].x != -1) sendMessage((int) brain[0].x, ATTACK_TARGET, args);
+      if(brain[0].y != -1) sendMessage((int) brain[0].y, ATTACK_TARGET, args);
+      if(brain[0].z != -1) sendMessage((int) brain[0].z, ATTACK_TARGET, args);
+    }
+  }*/
 
   //
   // handleMessage
@@ -919,6 +952,15 @@ class RedRocketLauncher extends RocketLauncher {
           brain[3].z = msg.args[1];
         }
       }
+      /* UNUSED
+      else if (msg.type == ATTACK_TARGET){
+        if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice){
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+          // locks the target
+          brain[4].y = 1;
+        }
+      }*/
     }
     // clear the message queue
     flushMessages();
