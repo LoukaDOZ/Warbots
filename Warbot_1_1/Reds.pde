@@ -662,9 +662,12 @@ class RedHarvester extends Harvester {
         heading = towards(brain[0]);
         // ...and try to move forward
         tryToMoveForward();
-      } else
-        // if the food is reached, clear the corresponding flag
-        brain[4].y = 0;
+      } else {
+        // if the food is reached and no found, clear the corresponding flag
+        // else keep this destination in mind
+        zorg = (Burger)minDist(perceiveBurgers());
+        brain[4].y = zorg != null ? 1 : 0;
+      }
     } else {
       // if no food seen and no food localized, explore randomly
       heading += random(-radians(45), radians(45));
@@ -744,7 +747,6 @@ class RedHarvester extends Harvester {
 
     if(lauchers != null) {
       for(int i = 0; i < lauchers.size(); i++) {
-        //println("Send connexion Harvester", (Robot)lauchers.get(i));
         sendMessage((Robot)lauchers.get(i), CONNEXION_LAUNCHER, EMPTY_ARGS);
       }
     }
@@ -806,6 +808,9 @@ class RedRocketLauncher extends RocketLauncher {
       // if in "go back to base" mode
       goBackToBase();
     } else {
+      // If burger seen, tell ally harvester
+      driveHarvester();
+
       // try to find a target
       selectTarget();
       
@@ -838,9 +843,18 @@ class RedRocketLauncher extends RocketLauncher {
 
   boolean looseTeam() {
     Robot teamate = game.getRobot((int) brain[3].x);
-    if(brain[4].z == DEFEND_ROLE) println(teamate);
 
     return teamate == null || distance(teamate) > messageRange;
+  }
+
+  // Drive ally harvester when food found
+  void driveHarvester() {
+    // look for burgers
+    Burger zorg = (Burger)minDist(perceiveBurgers());
+    if (zorg != null) {
+      // if one is seen, inform harvester
+      informAboutFood(game.getRobot((int) brain[3].x), zorg.pos);
+    }
   }
 
   //
@@ -937,7 +951,6 @@ class RedRocketLauncher extends RocketLauncher {
     for (int i=0; i<messages.size(); i++) {
       // get next message
       msg = messages.get(i);
-      //println(msg.type);
       
       // Check message is from ally
       Robot transmitter = game.getRobot(msg.alice);
