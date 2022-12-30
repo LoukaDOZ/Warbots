@@ -3,6 +3,8 @@
 // New Messages
 //
 // 
+///////////////////////////////////////////////////////////////////////////
+
 final int CONNEXION_LAUNCHER = 5;
 final int CONNEXION_DEFENDER = 6;
 final int CONFIRM_CONNEXION = 7;
@@ -10,11 +12,26 @@ final int ABORT_CONNEXION = 8;
 final int BACK_TO_BASE = 9;
 final int UPDATE_DIRECTION = 10;
 final int HEART_BEAT = 11;
-final int ATTACK_TARGET = 12;
+final int PROMUTE_SQUAD_LEADER = 12;
+final int CONNEXION_SQUAD = 13;
+final int SEARCH_LAUNCHER_NO_ROLE = 14;
+final int FREE = 15;
+final int ATTACK_TARGET = 16;
+
+///////////////////////////////////////////////////////////////////////////
+//
+// New Roles
+//
+//
+///////////////////////////////////////////////////////////////////////////
 
 final float NO_ROLE = 0f;
 final float HARVEST_ROLE = 1f;
 final float DEFEND_ROLE = 2f;
+final float SQUAD_LEADER = 3f;
+final float SQUAD_SOLDIER = 4f;
+final float WAITING_ROLE = 5f;
+
 final float[] EMPTY_ARGS = new float[0];
 
 ///////////////////////////////////////////////////////////////////////////
@@ -63,9 +80,12 @@ class RedBase extends Base {
     brain[0].y = -1;
     brain[0].z = -1;
 
-    newExplorer();
-    brain[5].x = 2;
-    brain[5].y = 3;
+    brain[1].x = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
+    brain[1].y = 0; // Code qui indique quelle action on effectu : 0 rien , 1 création d'une squad, 2 création squad harvester, ...
+    brain[1].z = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
+
+    brain[5].x = 0;
+    brain[5].y = 2;
     brain[5].z = 0;
   }
 
@@ -77,31 +97,54 @@ class RedBase extends Base {
   //
   void go() {
     // Check defenders are still alive
-    checkDefendersAlive();
+    //checkDefendersAlive();
     // handle received messages 
     handleMessages();
 
-    if(needDefender())
-      searchRocketLauncher();
-
-    // UNUSED
-    // Defend if ennemy is in base
-    //driveDefenders();
+    //if(needDefender())
+      //searchRocketLauncher();
 
     // creates new robots depending on energy and the state of brain[5]
-    if ((brain[5].x > 0) && (energy >= 1000 + harvesterCost)) {
+    /*if ((brain[5].x > 0) && (energy >= 1000 + harvesterCost)) {
       // 1st priority = creates harvesters 
-      if (newHarvester())
+      if (newHarvester()){
+        brain[1].z = 1;
         brain[5].x--;
+      }
     } else if ((brain[5].y > 0) && (energy >= 1000 + launcherCost)) {
       // 2nd priority = creates rocket launchers 
-      if (newRocketLauncher())
+      if (newRocketLauncher()){
+        brain[1].z = 1;
         brain[5].y--;
+      }
     } else if ((brain[5].z > 0) && (energy >= 1000 + explorerCost)) {
       // 3rd priority = creates explorers 
-      if (newExplorer())
+      if (newExplorer()){
+        brain[1].z = 1;
         brain[5].z--;
-    } /*else if (energy > 12000) {
+      }
+    } */
+
+    if (energy > 4*1000 + 4*launcherCost && brain[1].y == 0) {
+      brain[1].y = 1;
+    }
+
+    if(energy > 2*1000+ launcherCost+harvesterCost && brain[1].y == 0){
+      brain[1].y = 2;
+    }
+
+    
+
+    
+    
+    if(brain[1].y == 1){
+      createSquad();
+    }
+    else if(brain[1].y == 2){
+      createHarvesterSquad();
+    }
+    
+      /*else if (energy > 12000) {
       // if no robot in the pipe and enough energy 
       if ((int)random(2) == 0)
         // creates a new harvester with 50% chance
@@ -132,6 +175,68 @@ class RedBase extends Base {
       if(brain[0].x != -1) informAboutTarget((int) brain[0].x, bob);
       if(brain[0].y != -1) informAboutTarget((int) brain[0].y, bob);
       if(brain[0].z != -1) informAboutTarget((int) brain[0].z, bob);
+    }
+
+    
+  }
+
+  void createHarvesterSquad(){
+    if(brain[1].x == 0){
+      if(newHarvester()){
+        brain[1].x += 1;
+      }
+    }
+    else{
+      if(newRocketLauncher()){
+        brain[1].x = 0;
+        brain[1].y = 0;
+      }
+    }
+  }
+
+  void createSquad(){
+    //TODO search squad leader
+    if(brain[1].x == 0){
+      //Send message to know how many launcher are free
+      searchLauncher();
+      brain[1].x = 1;
+    } else if(brain[1].x == 1){
+      //Waiting 1 round
+      brain[1].x = 2;
+    } else if(brain[1].x == 2 && brain[1].z <= 3){
+      if(newRocketLauncher()){
+        if(brain[1].z == 0){ // No free launcher
+          println("ERROR", brain[1].z);
+          searchSquadLeader();
+        }
+        brain[1].z += 1;
+        println("TEST", brain[1].z);
+      }
+    } 
+    else {
+      brain[1].x = 0;
+      brain[1].y = 5; //TODO : change 0
+      brain[1].z = 0;
+    }
+  }
+
+  void searchLauncher() {
+    ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
+
+    if(lauchers != null) {
+      for(int i = 0; i < lauchers.size(); i++) {
+        sendMessage((Robot)lauchers.get(i), SEARCH_LAUNCHER_NO_ROLE, EMPTY_ARGS);
+      }
+    }
+  }
+
+  void searchSquadLeader() {
+    ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
+
+    if(lauchers != null) {
+      for(int i = 0; i < lauchers.size(); i++) {
+        sendMessage((Robot)lauchers.get(i), PROMUTE_SQUAD_LEADER, EMPTY_ARGS);
+      }
     }
   }
 
@@ -206,6 +311,15 @@ class RedBase extends Base {
           setDefender((float) msg.alice);
           sendMessage(msg.alice, CONFIRM_CONNEXION, new float[]{DEFEND_ROLE});
         } else {
+          sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
+        }
+      } // Si on recherche de quoi créer un squad
+      else if(brain[1].y == 1 && msg.type == FREE) {
+        if(brain[1].z == 0){ // Transform into leader
+          sendMessage(msg.alice, PROMUTE_SQUAD_LEADER, EMPTY_ARGS);
+          brain[1].z += 1;
+        } else {
+          brain[1].z += 1;
           sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
         }
       }
@@ -893,7 +1007,10 @@ class RedRocketLauncher extends RocketLauncher {
   //
   void setup() {
     brain[3].x = -1;
-    brain[4].z = 0;
+    brain[4].z = NO_ROLE;
+    brain[2].x = -1;
+    brain[2].y = -1;
+    brain[2].z = -1;
   }
 
   //
@@ -905,59 +1022,93 @@ class RedRocketLauncher extends RocketLauncher {
   void go() {
     // handle messages received
     handleMessages();
-    // if no energy or no bullets
-    if ((energy < 100) || (bullets == 0))
-      // go back to the base
-      brain[4].x = 1;
+    if(brain[4].z == SQUAD_LEADER && (brain[2].x == -1 || brain[2].y == -1 || brain[2].z == -1)){
+      //Search until squad is full
+      searchSquadSoldier();
+    }
+    else {
+      // if no energy or no bullets
+      if ((energy < 100) || (bullets == 0))
+        // go back to the base
+        brain[4].x = 1;
 
-    // Back to base if loose contact with :
-    // - harvester if HARVEST_ROLE
-    // - base if DEFEND_ROLE
-    if(brain[4].z != NO_ROLE && looseTeam())
-      brain[4].x = 1;
+      // Back to base if loose contact with :
+      // - harvester if HARVEST_ROLE
+      // - base if DEFEND_ROLE
+      // - squad leader if SQUAD_SOLDIER
+      if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER) && looseTeam())
+        brain[4].x = 1;
 
-    if (brain[4].x == 1) {
-      // if in "go back to base" mode
-      goBackToBase();
-    } else {
+      Base base = (Base) minDist(perceiveRobots(friend, BASE));
+      if(brain[4].z == WAITING_ROLE || (brain[4].z == NO_ROLE && (base == null || distance(base) > messageRange)))
+        brain[4].x = 1;
 
-      // try to find a target
-      if(brain[4].y != 2)
-        selectTarget();
-      
-      // Follow harvester
-      if(brain[4].z == HARVEST_ROLE) {
-        heading = brain[3].y;
-        forward(brain[3].z);
+      if (brain[4].x == 1) {
+        // if in "go back to base" mode
+        goBackToBase();
+      } else {
 
-        // If burger seen, tell ally harvester
-        driveHarvester();
+        // try to find a target
+        if(brain[4].y != 2)
+          selectTarget();
+        
+        // Follow harvester
+        if(brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER) {
+          heading = brain[3].y;
+          forward(brain[3].z);
 
-        // if target identified
-        if (target())
-          // shoot on the target
-          launchBullet(towards(brain[0]));
-      } else if(brain[4].z == DEFEND_ROLE || brain[4].z == NO_ROLE) {
-        // if target identified
-        if (target()) {
-          // Follow the target
-          if(distance(brain[0]) > 5) {
-            right(towards(brain[0]));
-            forward(speed);
+          if(brain[4].z == HARVEST_ROLE)
+            // If burger seen, tell ally harvester
+            driveHarvester();
+
+          // if target identified
+          if (target())
+            // shoot on the target
+            launchBullet(towards(brain[0]));
+        } else if(brain[4].z == SQUAD_LEADER){
+          // Notify direction to rocket launcher
+          sendMessage((int) brain[2].x, UPDATE_DIRECTION, new float[]{heading, speed});
+          sendMessage((int) brain[2].y, UPDATE_DIRECTION, new float[]{heading, speed});
+          sendMessage((int) brain[2].z, UPDATE_DIRECTION, new float[]{heading, speed});
+          forward(speed);
+
+          // if target identified
+          if (target())
+            // shoot on the target
+            launchBullet(towards(brain[0]));
+            
+        } else if(brain[4].z == DEFEND_ROLE || brain[4].z == NO_ROLE) {
+          // if target identified
+          if (target()) {
+            // Follow the target
+            if(distance(brain[0]) > 5) {
+              right(towards(brain[0]));
+              forward(speed);
+            } else {
+              // If no robot found at position given by base, reset flag
+              ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
+              if(robots == null || robots.size() == 0)
+                brain[4].y = 0;
+            }
+            // shoot on the target
+            launchBullet(towards(brain[0]));
           } else {
-            // If no robot found at position given by base, reset flag
-            ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
-            if(robots == null || robots.size() == 0)
-              brain[4].y = 0;
+            // Move randomly in base
+            //randomMove(90f);
+            heading += random(-radians(45f), radians(45f));
+            forward(0.3f);
           }
-          // shoot on the target
-          launchBullet(towards(brain[0]));
-        } else {
-          // Move randomly in base
-          //randomMove(90f);
-          heading += random(-radians(45f), radians(45f));
-          forward(0.3f);
         }
+      }
+    }
+  }
+
+  void searchSquadSoldier() {
+    ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
+
+    if(lauchers != null) {
+      for(int i = 0; i < lauchers.size(); i++) {
+        sendMessage((Robot)lauchers.get(i), CONNEXION_SQUAD, EMPTY_ARGS);
       }
     }
   }
@@ -1077,37 +1228,58 @@ class RedRocketLauncher extends RocketLauncher {
       Robot transmitter = game.getRobot(msg.alice);
       if(transmitter != null && transmitter.colour != friend) continue;
 
-      // if "connexion with harvester" message
-      if (msg.type == CONNEXION_LAUNCHER){
-        if(brain[3].x == -1){
-          brain[3].x = msg.alice;
-          sendMessage(msg.alice, CONFIRM_CONNEXION, EMPTY_ARGS);
-        }
-      }
-      else if (msg.type == CONNEXION_DEFENDER){
-        if(brain[3].x == -1){
+      if(msg.type == SEARCH_LAUNCHER_NO_ROLE && brain[3].x == -1 && brain[4].z == NO_ROLE){
+        brain[4].z = WAITING_ROLE;
+        brain[3].x = msg.alice;
+        sendMessage(msg.alice, FREE, EMPTY_ARGS);
+      } else if (msg.type == CONNEXION_LAUNCHER || msg.type == CONNEXION_DEFENDER || msg.type == CONNEXION_SQUAD){
+        if(brain[3].x == -1 && brain[4].z == NO_ROLE){
           brain[3].x = msg.alice;
           sendMessage(msg.alice, CONFIRM_CONNEXION, EMPTY_ARGS);
         }
       }
       else if (msg.type == CONFIRM_CONNEXION){
+        if(brain[4].z == SQUAD_LEADER){
+          if(brain[2].x == -1){
+            brain[2].x = msg.alice;
+            sendMessage(msg.alice, CONFIRM_CONNEXION, new float[]{SQUAD_SOLDIER});
+          }
+          else if(brain[2].y == -1){
+            brain[2].y = msg.alice;
+            sendMessage(msg.alice, CONFIRM_CONNEXION, new float[]{SQUAD_SOLDIER});
+          }
+          else if(brain[2].z == -1){
+            brain[2].z = msg.alice;
+            sendMessage(msg.alice, CONFIRM_CONNEXION, new float[]{SQUAD_SOLDIER});
+          }
+          else{
+            sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
+        }
+      }
+        else{
         if(brain[3].x == msg.alice){
-          brain[4].z = msg.args[0];
+            brain[4].z = msg.args[0]; // Robot Type
+          }
         }
       }
       else if (msg.type == ABORT_CONNEXION){
         if(brain[3].x == msg.alice){
+          brain[4].z = NO_ROLE;
           brain[3].x = -1;
         }
       }
       else if (msg.type == UPDATE_DIRECTION){
-        if(brain[4].z == HARVEST_ROLE && brain[3].x == msg.alice){
+        if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER ) && brain[3].x == msg.alice){
           brain[3].y = msg.args[0];
           brain[3].z = msg.args[1];
         }
       }
+      else if ((brain[4].z == NO_ROLE || brain[4].z == WAITING_ROLE) && msg.type == PROMUTE_SQUAD_LEADER){ //PROMUTE TO SQUAD LEADER
+        brain[4].z = SQUAD_LEADER;
+      }
       else if(msg.type == INFORM_ABOUT_TARGET) {
         if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
+          // Get target from base
           brain[0].x = msg.args[0];
           brain[0].y = msg.args[1];
           // locks the target
