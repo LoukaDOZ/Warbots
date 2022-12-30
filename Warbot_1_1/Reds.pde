@@ -63,11 +63,9 @@ class RedBase extends Base {
     brain[0].y = -1;
     brain[0].z = -1;
 
-    // creates a new harvester
     newExplorer();
-    // 7 more harvesters to create
     brain[5].x = 2;
-    brain[5].y = 2;
+    brain[5].y = 3;
     brain[5].z = 0;
   }
 
@@ -129,6 +127,11 @@ class RedBase extends Base {
       // launch a faf if no friend robot on the trajectory...
       if (perceiveRobotsInCone(friend, heading) == null)
         launchFaf(bob);
+
+      // Inform defenders
+      if(brain[0].x != -1) informAboutTarget((int) brain[0].x, bob);
+      if(brain[0].y != -1) informAboutTarget((int) brain[0].y, bob);
+      if(brain[0].z != -1) informAboutTarget((int) brain[0].z, bob);
     }
   }
 
@@ -297,6 +300,28 @@ class RedExplorer extends Explorer {
   // > called at the creation of the agent
   //
   void setup() {
+    // Ennemy base 1 pos
+    brain[0].x = -1;
+    brain[0].y = -1;
+    // Ennemy base 2 pos
+    brain[0].z = -1;
+    brain[1].x = -1;
+    // Food pos slot 1
+    brain[1].y = -1;
+    brain[1].z = -1;
+    // Food pos slot 2
+    brain[2].x = -1;
+    brain[2].y = -1;
+    // Food pos slot 3
+    brain[2].z = -1;
+    brain[3].x = -1;
+    // Ennemy pos slot 1
+    brain[3].y = -1;
+    brain[3].z = -1;
+    // Food pos index
+    brain[4].y = 0;
+    // Ennemy pos index
+    brain[4].z = 0;
   }
 
   //
@@ -321,16 +346,103 @@ class RedExplorer extends Explorer {
     }
 
     // tries to localize ennemy bases
-    lookForEnnemyBase();
+    //lookForEnnemyBase();
     // inform harvesters about food sources
-    driveHarvesters();
+    //driveHarvesters();
     // inform rocket launchers about targets
-    driveRocketLaunchers();
+    //driveRocketLaunchers();
+
+    // Locate ennemy base
+    locateEnnemyBase();
+    // Locate food
+    locateFood();
+
+    // Notify allies about info we get
+    notifyHarvesters();
+    notifyRocketLaunchers();
+
     // give wrong information to ennemies
     baitEnnemies();
 
     // clear the message queue
     flushMessages();
+  }
+
+  void locateEnnemyBase() {
+    if(brain[0].x != -1 && brain[0].z != -1) return;
+
+    ArrayList bases = perceiveRobots(ennemy, BASE);
+
+    if(bases != null) {
+      for(int i = 0; i < bases.size(); i++) {
+        PVector pos = ((Base) bases.get(i)).pos;
+        if(brain[0].x == -1) {
+          brain[0].x = pos.x;
+          brain[0].y = pos.y;
+        } else {
+          brain[0].z = pos.x;
+          brain[1].x = pos.y;
+        }
+      }
+    }
+  }
+
+  void locateFood() {
+    Burger zorg = (Burger)oneOf(perceiveBurgers());
+    if (zorg != null) {
+      if(brain[4].y == 0) {
+        brain[1].y = zorg.pos.x;
+        brain[1].z = zorg.pos.y;
+      } else if(brain[4].y == 1) {
+        brain[2].x = zorg.pos.x;
+        brain[2].y = zorg.pos.y;
+      } else if(brain[4].y == 2) {
+        brain[2].z = zorg.pos.x;
+        brain[3].x = zorg.pos.y;
+      }
+    }
+
+    brain[4].y = brain[4].y == 2 ? 0 : brain[4].y + 1;
+  }
+
+  void notifyHarvesters() {
+    ArrayList harvesters = perceiveRobots(friend, HARVESTER);
+    PVector food[] = new PVector[]{
+      new PVector(brain[1].y, brain[1].z), 
+      new PVector(brain[2].x, brain[2].y), 
+      new PVector(brain[2].z, brain[3].x)
+      };
+
+    if(harvesters != null) {
+      for(int i = 0; i < harvesters.size(); i++) {
+        for(int j = 0; j < food.length; j++) {
+          if(food[j].x != -1) {
+            informAboutFood((Harvester) harvesters.get(i), food[j]);
+          }
+        }
+      }
+    }
+  }
+
+  void notifyRocketLaunchers() {
+    ArrayList launchers = perceiveRobots(friend, LAUNCHER);
+    PVector bases[] = new PVector[]{
+      new PVector(brain[0].x, brain[0].y),
+      new PVector(brain[0].z, brain[1].x)
+      };
+
+    if(launchers != null) {
+      for(int i = 0; i < launchers.size(); i++) {
+        for(int j = 0; j < bases.length; j++) {
+          if(bases[j].x != -1) {
+            sendMessage(
+              (RocketLauncher) launchers.get(i), 
+              INFORM_ABOUT_XYTARGET, 
+              new float[]{BASE, bases[j].x, bases[j].y});
+          }
+        }
+      }
+    }
   }
 
   void baitEnnemies() {
@@ -808,16 +920,18 @@ class RedRocketLauncher extends RocketLauncher {
       // if in "go back to base" mode
       goBackToBase();
     } else {
-      // If burger seen, tell ally harvester
-      driveHarvester();
 
       // try to find a target
-      selectTarget();
+      if(brain[4].y != 2)
+        selectTarget();
       
       // Follow harvester
       if(brain[4].z == HARVEST_ROLE) {
         heading = brain[3].y;
         forward(brain[3].z);
+
+        // If burger seen, tell ally harvester
+        driveHarvester();
 
         // if target identified
         if (target())
@@ -827,15 +941,22 @@ class RedRocketLauncher extends RocketLauncher {
         // if target identified
         if (target()) {
           // Follow the target
-          if(distance(brain[0]) > 2) {
+          if(distance(brain[0]) > 5) {
             right(towards(brain[0]));
             forward(speed);
+          } else {
+            // If no robot found at position given by base, reset flag
+            ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
+            if(robots == null || robots.size() == 0)
+              brain[4].y = 0;
           }
           // shoot on the target
           launchBullet(towards(brain[0]));
         } else {
           // Move randomly in base
-          randomMove(90f);
+          //randomMove(90f);
+          heading += random(-radians(45f), radians(45f));
+          forward(0.3f);
         }
       }
     }
@@ -887,7 +1008,7 @@ class RedRocketLauncher extends RocketLauncher {
   // > true if target locket / false if not
   //
   boolean target() {
-    return (brain[4].y == 1);
+    return (brain[4].y == 1 || brain[4].y == 2);
   }
 
   //
@@ -983,6 +1104,14 @@ class RedRocketLauncher extends RocketLauncher {
         if(brain[4].z == HARVEST_ROLE && brain[3].x == msg.alice){
           brain[3].y = msg.args[0];
           brain[3].z = msg.args[1];
+        }
+      }
+      else if(msg.type == INFORM_ABOUT_TARGET) {
+        if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+          // locks the target
+          brain[4].y = 2;
         }
       }
       /* UNUSED
