@@ -17,6 +17,7 @@ final int CONNEXION_SQUAD = 13;
 final int SEARCH_LAUNCHER_NO_ROLE = 14;
 final int FREE = 15;
 final int ATTACK_TARGET = 16;
+final int FIND_BASE = 17;
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -83,6 +84,13 @@ class RedBase extends Base {
     brain[1].x = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
     brain[1].y = 0; // Code qui indique quelle action on effectu : 0 rien , 1 création d'une squad, 2 création squad harvester, ...
     brain[1].z = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
+
+    // Ennemy base 1 pos
+    brain[2].x = -1;
+    brain[2].y = -1;
+    // Ennemy base 2 pos
+    brain[2].z = -1;
+    brain[3].x = -1;
 
     brain[5].x = 0;
     brain[5].y = 2;
@@ -195,7 +203,6 @@ class RedBase extends Base {
   }
 
   void createSquad(){
-    //TODO search squad leader
     if(brain[1].x == 0){
       //Send message to know how many launcher are free
       searchLauncher();
@@ -215,7 +222,7 @@ class RedBase extends Base {
     } 
     else {
       brain[1].x = 0;
-      brain[1].y = 5; //TODO : change 0
+      brain[1].y = 0; //TODO : change 0
       brain[1].z = 0;
     }
   }
@@ -235,7 +242,7 @@ class RedBase extends Base {
 
     if(lauchers != null) {
       for(int i = 0; i < lauchers.size(); i++) {
-        sendMessage((Robot)lauchers.get(i), PROMUTE_SQUAD_LEADER, EMPTY_ARGS);
+        sendMessage((Robot)lauchers.get(i), PROMUTE_SQUAD_LEADER, new float[]{brain[2].x, brain[2].y, brain[2].z, brain[3].x});
       }
     }
   }
@@ -316,11 +323,20 @@ class RedBase extends Base {
       } // Si on recherche de quoi créer un squad
       else if(brain[1].y == 1 && msg.type == FREE) {
         if(brain[1].z == 0){ // Transform into leader
-          sendMessage(msg.alice, PROMUTE_SQUAD_LEADER, EMPTY_ARGS);
+          sendMessage(msg.alice, PROMUTE_SQUAD_LEADER, new float[]{brain[2].x, brain[2].y, brain[2].z, brain[3].x});
           brain[1].z += 1;
         } else {
           brain[1].z += 1;
           sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
+        }
+      }
+      else if(msg.type == FIND_BASE){
+        if(brain[2].x == -1) {
+          brain[2].x = msg.args[0];
+          brain[2].y = msg.args[1];
+        } else if(brain[2].z == -1 && (brain[2].x != msg.args[0] || brain[2].y != msg.args[1])){
+          brain[2].z = msg.args[0];
+          brain[3].x = msg.args[1];
         }
       }
     }
@@ -472,6 +488,8 @@ class RedExplorer extends Explorer {
     locateFood();
 
     // Notify allies about info we get
+    notifyBase();
+    notifyExplorer();
     notifyHarvesters();
     notifyRocketLaunchers();
 
@@ -493,9 +511,11 @@ class RedExplorer extends Explorer {
         if(brain[0].x == -1) {
           brain[0].x = pos.x;
           brain[0].y = pos.y;
-        } else {
+          brain[4].x = 1; // Back to Base
+        } else if(brain[0].z == -1 && (brain[0].x != pos.x || brain[0].y != pos.y)){
           brain[0].z = pos.x;
           brain[1].x = pos.y;
+          brain[4].x = 1; // Back to Base
         }
       }
     }
@@ -517,6 +537,42 @@ class RedExplorer extends Explorer {
     }
 
     brain[4].y = brain[4].y == 2 ? 0 : brain[4].y + 1;
+  }
+
+  void notifyExplorer(){
+    ArrayList explorers = perceiveRobots(friend, EXPLORER);
+    PVector bases[] = new PVector[]{
+      new PVector(brain[0].x, brain[0].y),
+      new PVector(brain[0].z, brain[1].x)
+      };
+
+    if(explorers != null) {
+      for(int i = 0; i < explorers.size(); i++) {
+        for(int j = 0; j < bases.length; j++) {
+          if(bases[j].x != -1) {
+            sendMessage((Explorer) explorers.get(i), FIND_BASE, new float[]{bases[j].x, bases[j].y});
+          }
+        }
+      }
+    }
+  }
+
+  void notifyBase(){
+    ArrayList bases2 = perceiveRobots(friend, BASE);
+    PVector bases[] = new PVector[]{
+      new PVector(brain[0].x, brain[0].y),
+      new PVector(brain[0].z, brain[1].x)
+      };
+
+    if(bases2 != null) {
+      for(int i = 0; i < bases2.size(); i++) {
+        for(int j = 0; j < bases.length; j++) {
+          if(bases[j].x != -1) {
+            sendMessage((Explorer) bases2.get(i), FIND_BASE, new float[]{bases[j].x, bases[j].y});
+          }
+        }
+      }
+    }
   }
 
   void notifyHarvesters() {
@@ -635,6 +691,40 @@ class RedExplorer extends Explorer {
       }
     }
   }
+
+  //
+  // handleMessages
+  // ==============
+  // > handle messages received
+  // > identify the closest localized burger
+  //
+  void handleMessages() {
+    float d = width;
+    PVector p = new PVector();
+
+    Message msg;
+    // for all messages
+    for (int i=0; i<messages.size(); i++) {
+      // get next message
+      msg = messages.get(i);
+      
+      // Check message is from ally
+      Robot transmitter = game.getRobot(msg.alice);
+      if(transmitter != null && transmitter.colour != friend) continue;
+      
+      // if "localized base" message
+      if (msg.type == FIND_BASE) {
+        if(brain[0].x == -1) {
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+        } else if(brain[0].z == -1 && (brain[0].x != msg.args[0] || brain[0].y != msg.args[1])){
+          brain[0].z = msg.args[0];
+          brain[1].x = msg.args[1];
+        }
+      }
+    }
+  }
+  
 
   //
   // target
