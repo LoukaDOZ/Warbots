@@ -338,7 +338,7 @@ class Simulation {
     for (int i=0; i<robots.size(); i++) {
       bob = robots.get(i);
       if (bob.energy <= 0)
-        bob.die();
+        bob.die(); //<>//
     }
 
     // remove the destroyed walls

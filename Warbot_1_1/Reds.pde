@@ -18,6 +18,7 @@ final int SEARCH_LAUNCHER_NO_ROLE = 14;
 final int FREE = 15;
 final int ATTACK_TARGET = 16;
 final int FIND_BASE = 17;
+final int NO_FOOD_HERE = 18;
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -94,8 +95,9 @@ class RedBase extends Base {
     brain[3].x = -1;
 
     brain[5].x = 0;
-    brain[5].y = 2;
+    brain[5].y = 0;
     brain[5].z = 0;
+    newExplorer();
   }
 
   //
@@ -146,12 +148,12 @@ class RedBase extends Base {
 
     
     
-    if(brain[1].y == 1){
+    /*if(brain[1].y == 1){
       createSquad();
     }
     else if(brain[1].y == 2){
       createHarvesterSquad();
-    }
+    }*/
     
       /*else if (energy > 12000) {
       // if no robot in the pipe and enough energy 
@@ -212,7 +214,6 @@ class RedBase extends Base {
     } else if(brain[1].x == 2 && brain[1].z <= 3){
       if(newRocketLauncher()){
         if(brain[1].z == 0){ // No free launcher
-          println("ERROR", brain[1].z);
           searchSquadLeader();
         }
         brain[1].z += 1;
@@ -470,7 +471,9 @@ class RedExplorer extends Explorer {
       goBackToBase();
     } else {
       // ...or explore randomly
-      randomMove(45);
+      //randomMove(45);
+      heading += random(-radians(45f), radians(45f));
+      forward(speed);
     }
 
     // tries to localize ennemy bases
@@ -539,6 +542,32 @@ class RedExplorer extends Explorer {
     brain[4].y = brain[4].y == 2 ? 0 : brain[4].y + 1;
   }
 
+  void refreshFoodLocations() {
+    if(brain[1].y != -1) {
+      Burger zorg = (Burger) oneOf(perceiveBurgers());
+      if(distance(new PVector(brain[1].y, brain[1].z)) <= 10 && zorg == null) {
+        brain[1].y = -1;
+        brain[1].z = -1;
+      }
+    }
+
+    if(brain[2].x != -1) {
+      Burger zorg = (Burger) oneOf(perceiveBurgers());
+      if(distance(new PVector(brain[1].y, brain[1].z)) <= 10 && zorg == null) {
+        brain[2].x = -1;
+        brain[2].y = -1;
+      }
+    }
+
+    if(brain[2].z != -1) {
+      Burger zorg = (Burger) oneOf(perceiveBurgers());
+      if(distance(new PVector(brain[1].y, brain[1].z)) <= 10 && zorg == null) {
+        brain[2].z = -1;
+        brain[3].x = -1;
+      }
+    }
+  }
+
   void notifyExplorer(){
     ArrayList explorers = perceiveRobots(friend, EXPLORER);
     PVector bases[] = new PVector[]{
@@ -575,25 +604,6 @@ class RedExplorer extends Explorer {
     }
   }
 
-  void refreshFoodLocations() {
-    /*if(brain[1].y != -1) {
-      if(distance(new PVector(brain[1].y, brain[1].z)) < 10) {
-        brain[1].y = -1;
-        brain[1].z = -1;
-      }
-    }
-    
-    if(brain[4].y == 1) {
-      brain[2].x = -1;
-      brain[2].y = -1;
-    } 
-    
-    if(brain[4].y == 2) {
-      brain[2].z = -1;
-      brain[3].x = -1;
-    }*/
-  }
-
   void notifyHarvesters() {
     ArrayList harvesters = perceiveRobots(friend, HARVESTER);
     PVector food[] = new PVector[]{
@@ -626,7 +636,7 @@ class RedExplorer extends Explorer {
           if(bases[j].x != -1) {
             sendMessage(
               (RocketLauncher) launchers.get(i), 
-              INFORM_ABOUT_XYTARGET, 
+              INFORM_ABOUT_TARGET, 
               new float[]{BASE, bases[j].x, bases[j].y});
           }
         }
@@ -739,6 +749,18 @@ class RedExplorer extends Explorer {
         } else if(brain[0].z == -1 && (brain[0].x != msg.args[0] || brain[0].y != msg.args[1])){
           brain[0].z = msg.args[0];
           brain[1].x = msg.args[1];
+        }
+      } else if(msg.type == NO_FOOD_HERE) {
+        // If sent food pos is told invalid by receiver, correct it
+        if(brain[1].y == msg.args[0] && brain[1].z == msg.args[1]) {
+          brain[1].y = -1;
+          brain[1].z = -1;
+        } else if(brain[2].x == msg.args[0] && brain[2].y == msg.args[1]) {
+          brain[2].x = -1;
+          brain[2].y = -1;
+        } else if(brain[2].z == msg.args[0] && brain[3].x == msg.args[1]) {
+          brain[2].z = -1;
+          brain[3].x = -1;
         }
       }
     }
@@ -1069,7 +1091,10 @@ class RedHarvester extends Harvester {
         // record the position of the burger
         p.x = msg.args[0];
         p.y = msg.args[1];
-        if (distance(p) < d && (p.x != brain[0].x || p.y != brain[0].y)) {
+
+        if(brain[4].y == 0 && p.x == brain[0].x && p.y == brain[0].y)
+          sendMessage(msg.alice, NO_FOOD_HERE, new float[]{p.x, p.y});
+        else if (distance(p) < d && (p.x != brain[0].x || p.y != brain[0].y)) {
           // if burger closer than closest burger
           // record the position in the brain
           brain[0].x = p.x;
@@ -1079,7 +1104,12 @@ class RedHarvester extends Harvester {
           // update the corresponding flag
           brain[4].y = 1;
         }
-      } // if "confirm connexion" message
+      } else if(msg.type == NO_FOOD_HERE) {
+        // If sent food pos is told invalid by receiver, correct it
+        if(brain[0].x == msg.args[0] && brain[0].y == msg.args[1] && brain[4].y == 1)
+          brain[4].y = 0;
+      }
+      // if "confirm connexion" message
       else if(msg.type == CONFIRM_CONNEXION && brain[3].x == -1) {
         brain[3].x = msg.alice;
         brain[4].z = HARVEST_ROLE;
@@ -1510,6 +1540,15 @@ class RedRocketLauncher extends RocketLauncher {
           brain[0].y = msg.args[1];
           // locks the target
           brain[4].y = 2;
+        } else if(brain[4].z == SQUAD_LEADER && msg.args[0] == BASE) {
+          // Get base pos from explorers if missing
+          if(brain[1].x == -1) {
+            brain[1].x = msg.args[1];
+            brain[1].y = msg.args[2];
+          } else if(brain[3].y == -1 && (brain[1].x != msg.args[1] || brain[1].y != msg.args[2])) {
+            brain[3].y = msg.args[1];
+            brain[3].z = msg.args[2];
+          }
         }
       }
       /* UNUSED
