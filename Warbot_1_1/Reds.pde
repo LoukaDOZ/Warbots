@@ -185,8 +185,6 @@ class RedBase extends Base {
       if(brain[0].y != -1) informAboutTarget((int) brain[0].y, bob);
       if(brain[0].z != -1) informAboutTarget((int) brain[0].z, bob);
     }
-
-    
   }
 
   void createHarvesterSquad(){
@@ -196,7 +194,7 @@ class RedBase extends Base {
       }
     }
     else{
-      if(newRocketLauncher()){
+      if(newExplorer()){
         brain[1].x = 0;
         brain[1].y = 0;
       }
@@ -570,7 +568,7 @@ class RedExplorer extends Explorer {
       for(int i = 0; i < bases2.size(); i++) {
         for(int j = 0; j < bases.length; j++) {
           if(bases[j].x != -1) {
-            sendMessage((Explorer) bases2.get(i), FIND_BASE, new float[]{bases[j].x, bases[j].y});
+            sendMessage((Base) bases2.get(i), FIND_BASE, new float[]{bases[j].x, bases[j].y});
           }
         }
       }
