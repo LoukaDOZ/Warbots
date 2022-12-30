@@ -32,6 +32,7 @@ final float DEFEND_ROLE = 2f;
 final float SQUAD_LEADER = 3f;
 final float SQUAD_SOLDIER = 4f;
 final float WAITING_ROLE = 5f;
+final float SOLO_HARVEST_ROLE = 6f;
 
 final float[] EMPTY_ARGS = new float[0];
 
@@ -217,12 +218,11 @@ class RedBase extends Base {
           searchSquadLeader();
         }
         brain[1].z += 1;
-        println("TEST", brain[1].z);
       }
     } 
     else {
       brain[1].x = 0;
-      brain[1].y = 0; //TODO : change 0
+      brain[1].y = 0;
       brain[1].z = 0;
     }
   }
@@ -482,6 +482,8 @@ class RedExplorer extends Explorer {
     // inform rocket launchers about targets
     //driveRocketLaunchers();
 
+    refreshFoodLocations();
+
     // Locate ennemy base
     locateEnnemyBase();
     // Locate food
@@ -573,6 +575,25 @@ class RedExplorer extends Explorer {
         }
       }
     }
+  }
+
+  void refreshFoodLocations() {
+    /*if(brain[1].y != -1) {
+      if(distance(new PVector(brain[1].y, brain[1].z)) < 10) {
+        brain[1].y = -1;
+        brain[1].z = -1;
+      }
+    }
+    
+    if(brain[4].y == 1) {
+      brain[2].x = -1;
+      brain[2].y = -1;
+    } 
+    
+    if(brain[4].y == 2) {
+      brain[2].z = -1;
+      brain[3].x = -1;
+    }*/
   }
 
   void notifyHarvesters() {
@@ -838,7 +859,7 @@ class RedHarvester extends Harvester {
   //
   void setup() {
     brain[3].x = -1;
-    brain[4].z = 0;
+    brain[4].z = SOLO_HARVEST_ROLE;
   }
 
   //
@@ -856,6 +877,9 @@ class RedHarvester extends Harvester {
       searchRocketLauncher();
     }
     else{
+      // Notify other harvesters if food in memory
+      //notifyHarvesters();
+
       // check for the closest burger
       Burger b = (Burger)minDist(perceiveBurgers());
       if ((b != null) && (distance(b) <= 2))
@@ -863,12 +887,12 @@ class RedHarvester extends Harvester {
         takeFood(b);
 
       // if food to deposit or too few energy
-      if ((carryingFood > 200) || (energy < 100))
+      if ((carryingFood > 2000) || (energy < 100))
         // time to go back to the base
         brain[4].x = 1;
 
       // Back to base if loose contact with rocket launcher
-      if(brain[4].z != NO_ROLE && looseTeam())
+      if(brain[4].z != NO_ROLE && brain[4].z != SOLO_HARVEST_ROLE && looseTeam())
         brain[4].x = 1;
 
       // if in "go back" state
@@ -891,8 +915,21 @@ class RedHarvester extends Harvester {
         // if not in the "go back" state, explore and collect food
         goAndEat();
 
-      // Notify direction to rocket launcher
-      sendMessage((int) brain[3].x, UPDATE_DIRECTION, new float[]{heading, speed});
+      if(brain[4].z == HARVEST_ROLE)
+        // Notify direction to rocket launcher
+        sendMessage((int) brain[3].x, UPDATE_DIRECTION, new float[]{heading, speed});
+    }
+  }
+
+  void notifyHarvesters() {
+    if(brain[4].y == 0) return;
+
+    ArrayList harvesters = perceiveRobots(friend, HARVESTER);
+
+    if(harvesters != null) {
+      for(int i = 0; i < harvesters.size(); i++) {
+        informAboutFood((Harvester) harvesters.get(i), brain[0]);
+      }
     }
   }
 
@@ -918,7 +955,7 @@ class RedHarvester extends Harvester {
         dropWall();
 
       if (dist <= 2) {
-        if(looseTeam())
+        if(looseTeam() && brain[4].z != SOLO_HARVEST_ROLE)
           brain[4].z = NO_ROLE;
 
         // if next to the base, gives the food to the base
@@ -983,6 +1020,9 @@ class RedHarvester extends Harvester {
         // else keep this destination in mind
         zorg = (Burger)minDist(perceiveBurgers());
         brain[4].y = zorg != null ? 1 : 0;
+
+        // If carrying food, go back to base
+        if(carryingFood > 200) brain[4].x = 1;
       }
     } else {
       // if no food seen and no food localized, explore randomly
@@ -1013,7 +1053,7 @@ class RedHarvester extends Harvester {
   // > identify the closest localized burger
   //
   void handleMessages() {
-    float d = width;
+    float d = brain[4].y == 1 ? distance(brain[0]) : width;
     PVector p = new PVector();
 
     Message msg;
@@ -1031,7 +1071,7 @@ class RedHarvester extends Harvester {
         // record the position of the burger
         p.x = msg.args[0];
         p.y = msg.args[1];
-        if (distance(p) < d) {
+        if (distance(p) < d && (p.x != brain[0].x || p.y != brain[0].y)) {
           // if burger closer than closest burger
           // record the position in the brain
           brain[0].x = p.x;
@@ -1101,6 +1141,11 @@ class RedRocketLauncher extends RocketLauncher {
     brain[2].x = -1;
     brain[2].y = -1;
     brain[2].z = -1;
+    // Bases pos
+    brain[3].y = -1;
+    brain[3].z = -1;
+    brain[1].x = -1;
+    brain[1].y = -1;
   }
 
   //
@@ -1139,39 +1184,46 @@ class RedRocketLauncher extends RocketLauncher {
       } else {
 
         // try to find a target
-        if(brain[4].y != 2)
+        if(brain[4].y != 2 && brain[4].z != SQUAD_SOLDIER && brain[4].z != SQUAD_LEADER)
           selectTarget();
         
         // Follow harvester
-        if(brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER) {
+        if(brain[4].z == HARVEST_ROLE) {
           heading = brain[3].y;
           forward(brain[3].z);
 
-          if(brain[4].z == HARVEST_ROLE)
-            // If burger seen, tell ally harvester
-            driveHarvester();
+          // If burger seen, tell ally harvester
+          driveHarvester();
 
           // if target identified
           if (target())
             // shoot on the target
             launchBullet(towards(brain[0]));
+        } else if(brain[4].z == SQUAD_SOLDIER) {
+          // if target identified
+          if (target()) {
+            // Go to target if not close enough
+            if(distance(brain[0]) > 4) {
+              right(towards(brain[0]));
+              forward(speed);
+            } else {
+              // shoot on the target
+              launchBullet(towards(brain[0]));
+            }
+          } else {
+            // Follow leader
+            heading = brain[3].y;
+            forward(brain[3].z);
+          }
         } else if(brain[4].z == SQUAD_LEADER){
-          // Notify direction to rocket launcher
-          sendMessage((int) brain[2].x, UPDATE_DIRECTION, new float[]{heading, speed});
-          sendMessage((int) brain[2].y, UPDATE_DIRECTION, new float[]{heading, speed});
-          sendMessage((int) brain[2].z, UPDATE_DIRECTION, new float[]{heading, speed});
-          forward(speed);
-
-          // if target identified
-          if (target())
-            // shoot on the target
-            launchBullet(towards(brain[0]));
+          // Drive squad to destroy ennemy bases
+          destroyEnnemyBases();
             
         } else if(brain[4].z == DEFEND_ROLE || brain[4].z == NO_ROLE) {
           // if target identified
           if (target()) {
             // Follow the target
-            if(distance(brain[0]) > 5) {
+            if(distance(brain[0]) > 4) {
               right(towards(brain[0]));
               forward(speed);
             } else {
@@ -1190,6 +1242,77 @@ class RedRocketLauncher extends RocketLauncher {
           }
         }
       }
+    }
+  }
+
+  void destroyEnnemyBases() {
+    // Go to ennemy base
+    PVector target = null;
+    boolean memBase = true;
+    boolean move = true;
+
+    if(brain[1].x != -1)
+      target = new PVector(brain[1].x, brain[1].y);
+    else if(brain[3].y != -1) {
+      target = new PVector(brain[3].y, brain[3].z);
+      memBase = false;
+    }
+
+    if(target != null) {
+      // If not close enough
+      if(distance(target) > 4) {
+        // Move towards base
+        heading = towards(target);
+      } else {
+        move = false;
+        Base targetBase = (Base) minDist(perceiveRobots(ennemy, BASE));
+
+        if(targetBase == null) {
+          // No base found, is it dead ?
+          // Remove base pos from memory
+          if(memBase) {
+            brain[1].x = -1;
+            brain[1].y = -1;
+          } else {
+            brain[3].y = -1;
+            brain[3].z = -1;
+          }
+
+          if(brain[4].y == 2) {
+            brain[4].y = 0;
+            //brain[4].x = 1;
+          }
+        } else {
+          // Base found, SHOOT !!
+          PVector towardsPos = targetBase.pos;
+          launchBullet(towards(targetBase));
+          sendMessage((int) brain[2].x, INFORM_ABOUT_TARGET, new float[]{towardsPos.x, towardsPos.y});
+          sendMessage((int) brain[2].y, INFORM_ABOUT_TARGET, new float[]{towardsPos.x, towardsPos.y});
+          sendMessage((int) brain[2].z, INFORM_ABOUT_TARGET, new float[]{towardsPos.x, towardsPos.y});
+          brain[4].y = 2;
+        }
+      }
+    } else {
+      // No base in memory, move randomly
+      heading += random(-radians(45f), radians(45f));
+
+      // if target identified
+      if (target()) {
+        // shoot on the target
+        launchBullet(towards(brain[0]));
+        sendMessage((int) brain[2].x, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
+        sendMessage((int) brain[2].y, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
+        sendMessage((int) brain[2].z, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
+        brain[4].y = 2;
+      }
+    }
+
+    if(move) {
+      // Notify direction to soldiers
+      sendMessage((int) brain[2].x, UPDATE_DIRECTION, new float[]{heading, speed});
+      sendMessage((int) brain[2].y, UPDATE_DIRECTION, new float[]{heading, speed});
+      sendMessage((int) brain[2].z, UPDATE_DIRECTION, new float[]{heading, speed});
+      forward(speed);
     }
   }
 
@@ -1266,8 +1389,10 @@ class RedRocketLauncher extends RocketLauncher {
       float dist = distance(bob);
 
       if (dist <= 2) {
-        if(looseTeam())
+        if(looseTeam()) {
           brain[4].z = NO_ROLE;
+          brain[4].y = 0;
+        }
 
         // if next to the base
         if (energy < 500)
@@ -1359,17 +1484,30 @@ class RedRocketLauncher extends RocketLauncher {
         }
       }
       else if (msg.type == UPDATE_DIRECTION){
-        if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER ) && brain[3].x == msg.alice){
+        if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER) && brain[3].x == msg.alice){
           brain[3].y = msg.args[0];
           brain[3].z = msg.args[1];
+
+          if(brain[4].z == SQUAD_SOLDIER)
+            brain[4].y = 0;
         }
       }
       else if ((brain[4].z == NO_ROLE || brain[4].z == WAITING_ROLE) && msg.type == PROMUTE_SQUAD_LEADER){ //PROMUTE TO SQUAD LEADER
         brain[4].z = SQUAD_LEADER;
+        brain[1].x = msg.args[0];
+        brain[1].y = msg.args[1];
+        brain[3].y = msg.args[2];
+        brain[3].z = msg.args[3];
       }
       else if(msg.type == INFORM_ABOUT_TARGET) {
         if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
           // Get target from base
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+          // locks the target
+          brain[4].y = 2;
+        } else if(brain[4].z == SQUAD_SOLDIER && brain[3].x == msg.alice) {
+          // Get target from squad leader
           brain[0].x = msg.args[0];
           brain[0].y = msg.args[1];
           // locks the target
