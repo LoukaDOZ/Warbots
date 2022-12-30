@@ -136,22 +136,79 @@ class RedBase extends Base {
       }
     } */
 
-    if (energy > 4*1000 + 4*launcherCost && brain[1].y == 0) {
-      brain[1].y = 1;
-    }
+    // TODO : définir une stratégie de déploiment (priorité sur les actions / quand faire quoi)
 
-    if(energy > 2*1000+ launcherCost+harvesterCost && brain[1].y == 0){
+    /* 
+     * Idée : 
+     * Toujours avoir de l'énérgie pour pouvoir recharger les robots => avoir pas mal de harmester pour ca
+     * Au début on envois quelques explorers qui cherche les bases adverses et reviennent a la base pour donner l'info
+     * Une fois cela fait on envoit une squad depuis chaque base pour detruire une base.
+     * Ensuite il rentre se recharger avant de repartir faire la meme chose sur la seconde base.
+     * 
+     * En parallèle : on crée des harvester et des rocket launcher (hunter) pour attaquer les adversaires et récolter des ressources
+     * on crée aussi occasionnelement des explorers qui peuvent transmettre de l'info au autres robots 
+     *
+     * => eventuellement gérer ca avec des probas si plus d'un certain montant de ressource ?
+     */
+
+
+
+    if(brain[2].x != -1){ // At least one enemy base discover
+      if(energy > 4*1000 + 4*launcherCost && brain[1].y == 0) {
+        brain[1].y = 1;
+      }
+    }
+    /*if(energy > 2*1000+ launcherCost+harvesterCost && brain[1].y == 0){
       brain[1].y = 2;
+    }*/
+    if(energy > 1000 + harvesterCost && brain[1].y == 0) {
+      brain[1].y = 4;
+    }
+
+    if(energy > 1000 + explorerCost && brain[1].y == 0) {
+      brain[1].y = 5;
+    }
+    
+
+    // Generate random robot 
+    // TODO : Test and eventually modify 1200 ?
+    if (energy > 12000 && brain[1].y == 0) {
+      // if no robot in the pipe and enough energy
+      int num = (int)random(10);
+      if (num == 0)
+        // creates a new explorer with 10% chance
+        brain[1].y = 5;
+      else if (num == 1)
+        // creates a new explorer with 10% chance
+        brain[1].y = 3;
+      else
+        // creates a new harvester with 80% chance
+        brain[1].y = 4;
     }
 
     
-
-    
-    
-    /*if(brain[1].y == 1){
+    if(brain[1].y == 1){ // Create 1 launcher squad
       createSquad();
     }
-    else if(brain[1].y == 2){
+    else if(brain[1].y == 4){ // Create 1 harvester
+      if(newHarvester()){
+        brain[1].y = 0;
+      }
+    }
+    else if(brain[1].y == 5){ // Create 1 explorer
+      if(newExplorer()){
+        brain[1].y = 0;
+      }
+    }
+    else if(brain[1].y == 6){ // Create 1 rocket launcher (whithout any role)
+      if(newRocketLauncher()){
+        brain[1].y = 0;
+      }
+    }
+    else if(brain[1].y == 7){ // Create 1 defender if needed
+      checkDefendersAlive();
+    }
+    /*else if(brain[1].y == 2){
       createHarvesterSquad();
     }*/
     
@@ -343,7 +400,7 @@ class RedBase extends Base {
     flushMessages();
   }
 
-  void checkDefendersAlive() {
+  void checkDefendersAlive() { // Create a defender (rocket laucher) if needed (1 by call max 3)
     ArrayList launchers = perceiveRobots(friend, LAUNCHER);
     boolean[] alive = new boolean[]{false, false, false};
 
@@ -358,17 +415,27 @@ class RedBase extends Base {
 
     if(!alive[0]) {
       brain[0].x = -1;
-      brain[5].y++;
+      if(newHarvester()){
+        searchRocketLauncher();
+        brain[1].y = 0;
+      }
     }
-
-    if(!alive[1]) {
+    else if(!alive[1]) {
       brain[0].y = -1;
-      brain[5].y++;
+      if(newHarvester()){
+        searchRocketLauncher();
+        brain[1].y = 0;
+      }
     }
-
-    if(!alive[2]) {
+    else if(!alive[2]) {
       brain[0].z = -1;
-      brain[5].y++;
+      if(newHarvester()){
+        searchRocketLauncher();
+        brain[1].y = 0;
+      }
+    }
+    else{
+      brain[1].y = 0;
     }
   }
 
