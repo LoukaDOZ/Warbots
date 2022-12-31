@@ -19,6 +19,7 @@ final int FREE = 15;
 final int ATTACK_TARGET = 16;
 final int FIND_BASE = 17;
 final int NO_FOOD_HERE = 18;
+final int PROMUTE_HUNTER_LEADER = 19;
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -34,6 +35,8 @@ final float SQUAD_LEADER = 3f;
 final float SQUAD_SOLDIER = 4f;
 final float WAITING_ROLE = 5f;
 final float SOLO_HARVEST_ROLE = 6f;
+final float HUNTER_LEADER = 7f;
+final float HUNTER_ROLE = 8f;
 
 final float[] EMPTY_ARGS = new float[0];
 
@@ -190,6 +193,9 @@ class RedBase extends Base {
     if(brain[1].y == 1){ // Create 1 launcher squad
       createSquad();
     }
+    else if(brain[1].y == 3) { // Create 1 hunter
+      createHunter();
+    }
     else if(brain[1].y == 4){ // Create 1 harvester
       if(newHarvester()){
         brain[1].y = 0;
@@ -253,7 +259,7 @@ class RedBase extends Base {
       }
     }
     else{
-      if(newExplorer()){
+      if(newRocketLauncher()){
         brain[1].x = 0;
         brain[1].y = 0;
       }
@@ -283,6 +289,29 @@ class RedBase extends Base {
     }
   }
 
+  void createHunter(){
+    if(brain[1].x == 0){
+      //Send message to know how many launcher are free
+      searchLauncher();
+      brain[1].x = 1;
+    } else if(brain[1].x == 1){
+      //Waiting 1 round
+      brain[1].x = 2;
+    } else if(brain[1].x == 2 && brain[1].z < 1){
+      if(newRocketLauncher()){
+        if(brain[1].z == 0){ // No free launcher
+          searchHunterLeader();
+        }
+        brain[1].z += 1;
+      }
+    } 
+    else {
+      brain[1].x = 0;
+      brain[1].y = 4;//TODO
+      brain[1].z = 0;
+    }
+  }
+
   void searchLauncher() {
     ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
 
@@ -299,6 +328,16 @@ class RedBase extends Base {
     if(lauchers != null) {
       for(int i = 0; i < lauchers.size(); i++) {
         sendMessage((Robot)lauchers.get(i), PROMUTE_SQUAD_LEADER, new float[]{brain[2].x, brain[2].y, brain[2].z, brain[3].x});
+      }
+    }
+  }
+
+  void searchHunterLeader() {
+    ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
+
+    if(lauchers != null) {
+      for(int i = 0; i < lauchers.size(); i++) {
+        sendMessage((Robot)lauchers.get(i), PROMUTE_HUNTER_LEADER, EMPTY_ARGS);
       }
     }
   }
@@ -380,6 +419,15 @@ class RedBase extends Base {
       else if(brain[1].y == 1 && msg.type == FREE) {
         if(brain[1].z == 0){ // Transform into leader
           sendMessage(msg.alice, PROMUTE_SQUAD_LEADER, new float[]{brain[2].x, brain[2].y, brain[2].z, brain[3].x});
+          brain[1].z += 1;
+        } else {
+          brain[1].z += 1;
+          sendMessage(msg.alice, ABORT_CONNEXION, EMPTY_ARGS);
+        }
+      } // Si on recherche de quoi créer des chasseurs
+      else if(brain[1].y == 3 && msg.type == FREE) {
+        if(brain[1].z == 0){ // Transform into hunter leader
+          sendMessage(msg.alice, PROMUTE_HUNTER_LEADER, EMPTY_ARGS);
           brain[1].z += 1;
         } else {
           brain[1].z += 1;
@@ -697,15 +745,41 @@ class RedExplorer extends Explorer {
       new PVector(brain[0].z, brain[1].x)
       };
 
+    // Get newest food pos known
+    int l = (int) brain[4].y;
+    PVector burgerPos = null;
+    for(int k = 0; k < 3; k++) {
+      if(l == 0 && brain[1].y != -1) {
+        burgerPos = new PVector(brain[1].y, brain[1].z);
+        break;
+      } else if(l == 1 && brain[2].x != -1) {
+        burgerPos = new PVector(brain[2].x, brain[2].y);
+        break;
+      } else if(l == 2 && brain[2].z != -1) {
+        burgerPos = new PVector(brain[2].z, brain[3].x);
+        break;
+      }
+
+      if(l == 0) l = 2;
+      else l--;
+    }
+
     if(launchers != null) {
       for(int i = 0; i < launchers.size(); i++) {
+        RocketLauncher launcher = (RocketLauncher) launchers.get(i);
+
         for(int j = 0; j < bases.length; j++) {
           if(bases[j].x != -1) {
+            // Send bases pos to squad leaders
             sendMessage(
-              (RocketLauncher) launchers.get(i), 
-              INFORM_ABOUT_TARGET, 
-              new float[]{BASE, bases[j].x, bases[j].y});
+              launcher, INFORM_ABOUT_TARGET, new float[]{bases[j].x, bases[j].y, BASE});
           }
+        }
+
+        // Also give the newest food pos info for hunters to defend it
+        if(burgerPos != null) {
+          sendMessage(
+              launcher, INFORM_ABOUT_TARGET, new float[]{burgerPos.x, burgerPos.y, BURGER});
         }
       }
     }
@@ -974,7 +1048,7 @@ class RedHarvester extends Harvester {
         takeFood(b);
 
       // if food to deposit or too few energy
-      if ((carryingFood > 2000) || (energy < 100))
+      if ((carryingFood >= 1000) || (energy < 100))
         // time to go back to the base
         brain[4].x = 1;
 
@@ -1255,8 +1329,7 @@ class RedRocketLauncher extends RocketLauncher {
     if(brain[4].z == SQUAD_LEADER && (brain[2].x == -1 || brain[2].y == -1 || brain[2].z == -1)){
       //Search until squad is full
       searchSquadSoldier();
-    }
-    else {
+    } else {
       // if no energy or no bullets
       if ((energy < 100) || (bullets == 0))
         // go back to the base
@@ -1266,7 +1339,8 @@ class RedRocketLauncher extends RocketLauncher {
       // - harvester if HARVEST_ROLE
       // - base if DEFEND_ROLE
       // - squad leader if SQUAD_SOLDIER
-      if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER) && looseTeam())
+      if((brain[4].z == HARVEST_ROLE || brain[4].z == SQUAD_SOLDIER)
+          && looseTeam())
         brain[4].x = 1;
 
       Base base = (Base) minDist(perceiveRobots(friend, BASE));
@@ -1279,7 +1353,9 @@ class RedRocketLauncher extends RocketLauncher {
       } else {
 
         // try to find a target
-        if(brain[4].y != 2 && brain[4].z != SQUAD_SOLDIER && brain[4].z != SQUAD_LEADER)
+        if(brain[4].y != 2 
+            && brain[4].z != SQUAD_SOLDIER && brain[4].z != SQUAD_LEADER
+            && brain[4].z != HUNTER_LEADER)
           selectTarget();
         
         // Follow harvester
@@ -1297,8 +1373,9 @@ class RedRocketLauncher extends RocketLauncher {
         } else if(brain[4].z == SQUAD_SOLDIER) {
           // if target identified
           if (target()) {
-            // Go to target if not close enough
-            if(distance(brain[0]) > 4) {
+            // Go to target if not close enough and not to far from leader
+            Robot leader = game.getRobot((int) brain[3].x);
+            if(distance(brain[0]) > 4 && (leader == null || distance(leader) < 4)) {
               right(towards(brain[0]));
               forward(speed);
             } else {
@@ -1313,7 +1390,9 @@ class RedRocketLauncher extends RocketLauncher {
         } else if(brain[4].z == SQUAD_LEADER){
           // Drive squad to destroy ennemy bases
           destroyEnnemyBases();
-            
+        } else if(brain[4].z == HUNTER_LEADER){
+          // Hunt ennemies
+          hunt();
         } else if(brain[4].z == DEFEND_ROLE || brain[4].z == NO_ROLE) {
           // if target identified
           if (target()) {
@@ -1411,6 +1490,71 @@ class RedRocketLauncher extends RocketLauncher {
     }
   }
 
+  void hunt() {
+    // Find ennemy by priority
+    int typePriority[] = new int[]{LAUNCHER, HARVESTER, EXPLORER, BASE};
+    Robot robotTarget = null;
+    PVector target = null;
+
+    // Search target
+    for(int i = 0; i < typePriority.length && robotTarget == null; i++) {
+      robotTarget = (Robot) minDist(perceiveRobots(ennemy, typePriority[i]));
+    }
+
+    // If no target in memory
+    if(!target()) {
+      if(robotTarget != null) {
+        brain[0] = new PVector(robotTarget.pos.x, robotTarget.pos.y, robotTarget.breed);
+        brain[4].y = 2;
+
+        // If not close enough
+        if(distance(brain[0]) > 4) {
+          // Move towards target
+          heading = towards(brain[0]);
+          forward(speed);
+        } else
+          hunterAttack(brain[0]);
+      } else {
+        // No target, move randomly
+        heading += random(-radians(45f), radians(45f));
+        forward(speed);
+      }
+    } else {
+      target = brain[0];
+
+      // If not close enough
+      if(distance(target) > 4) {
+        // Move towards target
+        heading = towards(target);
+        forward(speed);
+      } else {
+        robotTarget = (Robot) minDist(perceiveRobots(ennemy, (int) brain[0].z));
+
+        // If no target here, back to exploration mode
+        if(robotTarget == null) {
+          brain[4].y = 0;
+        } else {
+          hunterAttack(new PVector(robotTarget.pos.x, robotTarget.pos.y, robotTarget.breed));
+        }
+      }
+    }
+  }
+
+  void hunterAttack(PVector target) {
+    if(target != null) {
+      // SHOOT !!
+      launchBullet(towards(target));
+
+      // Notify target to close hunters
+      ArrayList launchers = perceiveRobots(friend, LAUNCHER);
+      if(launchers != null) {
+        for(int i = 0; i < launchers.size(); i++) {
+          sendMessage((RocketLauncher) launchers.get(i), INFORM_ABOUT_TARGET, new float[]{target.x, target.y, target.z});
+        }
+      }
+    }
+  }
+
   void searchSquadSoldier() {
     ArrayList lauchers = perceiveRobots(friend, LAUNCHER);
 
@@ -1476,6 +1620,9 @@ class RedRocketLauncher extends RocketLauncher {
   // > go back to the closest base
   //
   void goBackToBase() {
+    if(brain[4].z == HUNTER_LEADER)
+      brain[4].y = 0;
+
     sendMessage((int) brain[3].x, BACK_TO_BASE, EMPTY_ARGS);
     // look for closest base
     Base bob = (Base)minDist(myBases);
@@ -1484,7 +1631,7 @@ class RedRocketLauncher extends RocketLauncher {
       float dist = distance(bob);
 
       if (dist <= 2) {
-        if(looseTeam()) {
+        if(looseTeam() && brain[4].z != HUNTER_LEADER) {
           brain[4].z = NO_ROLE;
           brain[4].y = 0;
         }
@@ -1587,12 +1734,17 @@ class RedRocketLauncher extends RocketLauncher {
             brain[4].y = 0;
         }
       }
-      else if ((brain[4].z == NO_ROLE || brain[4].z == WAITING_ROLE) && msg.type == PROMUTE_SQUAD_LEADER){ //PROMUTE TO SQUAD LEADER
+      else if ((brain[4].z == NO_ROLE || brain[4].z == WAITING_ROLE) && msg.type == PROMUTE_SQUAD_LEADER){
+        //PROMUTE TO SQUAD LEADER
         brain[4].z = SQUAD_LEADER;
         brain[1].x = msg.args[0];
         brain[1].y = msg.args[1];
         brain[3].y = msg.args[2];
         brain[3].z = msg.args[3];
+      }
+      else if ((brain[4].z == NO_ROLE || brain[4].z == WAITING_ROLE) && msg.type == PROMUTE_HUNTER_LEADER){
+        //PROMUTE TO HUNTER LEADER
+        brain[4].z = HUNTER_LEADER;
       }
       else if(msg.type == INFORM_ABOUT_TARGET) {
         if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
@@ -1601,20 +1753,48 @@ class RedRocketLauncher extends RocketLauncher {
           brain[0].y = msg.args[1];
           // locks the target
           brain[4].y = 2;
-        } else if(brain[4].z == SQUAD_SOLDIER && brain[3].x == msg.alice) {
-          // Get target from squad leader
+        } else if((brain[4].z == SQUAD_SOLDIER) && brain[3].x == msg.alice) {
+          // Get target from squad leader or from an other hunter
           brain[0].x = msg.args[0];
           brain[0].y = msg.args[1];
           // locks the target
           brain[4].y = 2;
-        } else if(brain[4].z == SQUAD_LEADER && msg.args[0] == BASE) {
+        } else if(brain[4].z == HUNTER_LEADER && msg.args.length >= 3) {
+          // If has target, check if it is worth to help transmitter
+          // If burger type, msg has been sent by explorer to notify
+          // a food zone to defend if not occupied anywhere else
+          if(brain[4].y != 0) {
+            int typePriority[] = new int[]{LAUNCHER, HARVESTER, EXPLORER, BASE, BURGER};
+            int msgPrority = 0;
+            int myPriority = 0;
+
+            for(int j = 0; j < typePriority.length; j++) {
+              if(typePriority[j] == msg.args[2]) msgPrority = j;
+              if(typePriority[j] == brain[0].z) myPriority = j;
+            }
+
+            // Check if trasmitter hunter target is better
+            if(msgPrority <= myPriority) {
+              brain[0].x = msg.args[0];
+              brain[0].y = msg.args[1];
+              brain[0].z = msg.args[2];
+              brain[4].y = 2;
+            }
+          } else {
+            // If no target, go help
+            brain[0].x = msg.args[0];
+            brain[0].y = msg.args[1];
+            brain[0].z = msg.args[2];
+            brain[4].y = 2;
+          }
+        } else if(brain[4].z == SQUAD_LEADER && msg.args[2] == BASE) {
           // Get base pos from explorers if missing
           if(brain[1].x == -1) {
-            brain[1].x = msg.args[1];
-            brain[1].y = msg.args[2];
-          } else if(brain[3].y == -1 && (brain[1].x != msg.args[1] || brain[1].y != msg.args[2])) {
-            brain[3].y = msg.args[1];
-            brain[3].z = msg.args[2];
+            brain[1].x = msg.args[0];
+            brain[1].y = msg.args[1];
+          } else if(brain[3].y == -1 && (brain[1].x != msg.args[0] || brain[1].y != msg.args[1])) {
+            brain[3].y = msg.args[0];
+            brain[3].z = msg.args[1];
           }
         }
       }
