@@ -178,10 +178,10 @@ class RedBase extends Base {
     if (energy > 12000 && brain[1].y == 0) {
       // if no robot in the pipe and enough energy
       int num = (int)random(10);
-      if (num >= 0 && num < 5)
+      if (num == 1)
         // creates a new explorer with 10% chance
         brain[1].y = 5;
-      else if (num >= 5 && num < 10)
+      else if (num == 2)
         // creates a new explorer with 10% chance
         brain[1].y = 3;
       else
@@ -779,7 +779,7 @@ class RedExplorer extends Explorer {
         // Also give the newest food pos info for hunters to defend it
         if(burgerPos != null) {
           sendMessage(
-              launcher, INFORM_ABOUT_TARGET, new float[]{burgerPos.x, burgerPos.y, BURGER});
+              launcher, INFORM_ABOUT_XYTARGET, new float[]{burgerPos.x, burgerPos.y, BURGER});
         }
       }
     }
@@ -1063,7 +1063,7 @@ class RedHarvester extends Harvester {
         goBackToBase();
 
         // if enough energy and food
-        if ((energy > 100) && (carryingFood > 500) && brain[1].x < 30) {
+        if ((energy > 100) && (carryingFood > 500) && brain[1].x < 20) {
           // check for closest base
           Base bob = (Base)minDist(myBases);
           if (bob != null) {
@@ -1131,7 +1131,7 @@ class RedHarvester extends Harvester {
         dropWall();
 
       // If hasn't finished to plant seeds and still have energy, don't give food
-      if(energy <= 100 || carryingFood <= 500 || brain[1].x >= 30) {
+      if(energy <= 100 || carryingFood <= 500 || brain[1].x >= 20) {
         if (dist <= 2) {
           if(looseTeam() && brain[4].z != SOLO_HARVEST_ROLE)
             brain[4].z = NO_ROLE;
@@ -1425,8 +1425,13 @@ class RedRocketLauncher extends RocketLauncher {
               if(robots == null || robots.size() == 0)
                 brain[4].y = 0;
             }
-            // shoot on the target
-            launchBullet(towards(brain[0]));
+
+            // if no friend robot on the trajectory...
+            if (perceiveRobotsInCone(friend, towards(brain[0])) == null)
+              // shoot on the target
+              launchBullet(towards(brain[0]));
+            else
+              forward(speed);
           } else {
             // Move randomly in base
             //randomMove(90f);
@@ -1562,13 +1567,18 @@ class RedRocketLauncher extends RocketLauncher {
   void hunterAttack(PVector target) {
     if(target != null) {
       // SHOOT !!
-      launchBullet(towards(target));
+      // if no friend robot on the trajectory...
+      if (perceiveRobotsInCone(friend, towards(target)) == null)
+        // shoot on the target
+        launchBullet(towards(target));
+      else
+        forward(speed);
 
       // Notify target to close hunters
       ArrayList launchers = perceiveRobots(friend, LAUNCHER);
       if(launchers != null) {
         for(int i = 0; i < launchers.size(); i++) {
-          sendMessage((RocketLauncher) launchers.get(i), INFORM_ABOUT_TARGET, new float[]{target.x, target.y, target.z});
+          sendMessage((RocketLauncher) launchers.get(i), INFORM_ABOUT_XYTARGET, new float[]{target.x, target.y, target.z});
         }
       }
     }
@@ -1765,20 +1775,8 @@ class RedRocketLauncher extends RocketLauncher {
         //PROMUTE TO HUNTER LEADER
         brain[4].z = HUNTER_LEADER;
       }
-      else if(msg.type == INFORM_ABOUT_TARGET) {
-        if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
-          // Get target from base
-          brain[0].x = msg.args[0];
-          brain[0].y = msg.args[1];
-          // locks the target
-          brain[4].y = 2;
-        } else if((brain[4].z == SQUAD_SOLDIER) && brain[3].x == msg.alice) {
-          // Get target from squad leader or from an other hunter
-          brain[0].x = msg.args[0];
-          brain[0].y = msg.args[1];
-          // locks the target
-          brain[4].y = 2;
-        } else if(brain[4].z == HUNTER_LEADER && msg.args.length >= 3) {
+      else if( msg.type == INFORM_ABOUT_XYTARGET) {
+        if(brain[4].z == HUNTER_LEADER && msg.args.length >= 3) {
           // If has target, check if it is worth to help transmitter
           // If burger type, msg has been sent by explorer to notify
           // a food zone to defend if not occupied anywhere else
@@ -1806,6 +1804,21 @@ class RedRocketLauncher extends RocketLauncher {
             brain[0].z = msg.args[2];
             brain[4].y = 2;
           }
+        }
+      }
+      else if(msg.type == INFORM_ABOUT_TARGET) {
+        if(brain[4].z == DEFEND_ROLE && brain[3].x == msg.alice) {
+          // Get target from base
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+          // locks the target
+          brain[4].y = 2;
+        } else if((brain[4].z == SQUAD_SOLDIER) && brain[3].x == msg.alice) {
+          // Get target from squad leader or from an other hunter
+          brain[0].x = msg.args[0];
+          brain[0].y = msg.args[1];
+          // locks the target
+          brain[4].y = 2;
         } else if(brain[4].z == SQUAD_LEADER && msg.args[2] == BASE) {
           // Get base pos from explorers if missing
           if(brain[1].x == -1) {
