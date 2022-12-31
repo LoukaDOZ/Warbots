@@ -87,7 +87,7 @@ class RedBase extends Base {
     brain[0].z = -1;
 
     brain[1].x = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
-    brain[1].y = 0; // Code qui indique quelle action on effectu : 0 rien , 1 création d'une squad, 2 création squad harvester, ...
+    brain[1].y = 8; // Code qui indique quelle action on effectu : 0 rien , 1 création d'une squad, 2 création squad harvester, ...
     brain[1].z = 0; // Indicateur pour la création à reset à 0 une fois l'action fini
 
     // Ennemy base 1 pos
@@ -170,7 +170,6 @@ class RedBase extends Base {
     /*if(energy > 1000 + explorerCost && brain[1].y == 0) {
       brain[1].y = 5;
     }*/
-    
 
     // Generate random robot 
     // TODO : Test and eventually modify 1200 ?
@@ -212,6 +211,19 @@ class RedBase extends Base {
     }
     else if(brain[1].y == 7){ // Create 1 defender if needed
       checkDefendersAlive();
+    }
+    else if(brain[1].y == 8){
+      if(brain[2].x == -1 || brain[2].y == -1 || brain[2].z == -1 || brain[3].x == -1){
+        newExplorer();
+        newHarvester();
+      }
+      else{
+        for(int i = 0 ; i < 4 ; i++){
+          newHarvester();
+        }
+      }
+
+      brain[1].y = 0;
     }
     /*else if(brain[1].y == 2){
       createHarvesterSquad();
