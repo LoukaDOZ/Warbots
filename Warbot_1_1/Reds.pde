@@ -170,6 +170,7 @@ class RedBase extends Base {
     /*if(energy > 1000 + explorerCost && brain[1].y == 0) {
       brain[1].y = 5;
     }*/
+    
 
     // Generate random robot 
     // TODO : Test and eventually modify 1200 ?
@@ -366,7 +367,6 @@ class RedBase extends Base {
   // UNUSED
   /*void driveDefenders() {
     Robot target = null;
-
     // Search ennemy
     ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
     if(robots != null && robots.size() > 0)
@@ -381,7 +381,6 @@ class RedBase extends Base {
           target = (Robot) robots.get(0);
       }
     }
-
     // Ennemy found
     if(target != null) {
       float[] args = new float[]{target.pos.x, target.pos.y};
