@@ -100,7 +100,6 @@ class RedBase extends Base {
     brain[5].x = 0;
     brain[5].y = 0;
     brain[5].z = 0;
-    newExplorer();
   }
 
   //
@@ -575,6 +574,8 @@ class RedExplorer extends Explorer {
   // > defines the behavior of the agent
   //
  void go() {
+    handleMessages();
+
     // if food to deposit or too few energy
     if ((carryingFood > 200) || (energy < 100))
       // time to go back to base
@@ -587,8 +588,9 @@ class RedExplorer extends Explorer {
     } else {
       // ...or explore randomly
       //randomMove(45);
-      heading += random(-radians(45f), radians(45f));
-      forward(speed);
+      heading += random(-radians(45), radians(45));
+      //forward(speed);
+      tryToMoveForward(speed);
     }
 
     // tries to localize ennemy bases
@@ -992,6 +994,21 @@ class RedExplorer extends Explorer {
     if (freeAhead(speed))
       forward(speed);
   }
+
+  //
+  // tryToMoveForward
+  // ================
+  // > try to move forward after having checked that no obstacle is in front
+  //
+  void tryToMoveForward(float s) {
+    // if there is an obstacle ahead, rotate randomly
+    if (!freeAhead(s))
+      right(random(360));
+
+    // if there is no obstacle ahead, move forward at full speed
+    if (freeAhead(s))
+      forward(s);
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1091,7 +1108,8 @@ class RedHarvester extends Harvester {
   void plantSeeds() {
     // Move randomly
     heading += random(-radians(45f), radians(45f));
-    forward(speed);
+    //forward(speed);
+    tryToMoveForward();
     // plant one burger as a seed to produce new ones
     plantSeed();
     brain[1].x++;
@@ -1209,6 +1227,21 @@ class RedHarvester extends Harvester {
       heading += random(-radians(45), radians(45));
       tryToMoveForward();
     }
+  }
+
+  //
+  // tryToMoveForward
+  // ================
+  // > try to move forward after having checked that no obstacle is in front
+  //
+  void tryToMoveForward(float s) {
+    // if there is an obstacle ahead, rotate randomly
+    if (!freeAhead(s))
+      right(random(360));
+
+    // if there is no obstacle ahead, move forward at full speed
+    if (freeAhead(s))
+      forward(s);
   }
 
   //
@@ -1380,7 +1413,7 @@ class RedRocketLauncher extends RocketLauncher {
         // Follow harvester
         if(brain[4].z == HARVEST_ROLE) {
           heading = brain[3].y;
-          forward(brain[3].z);
+          tryToMoveForward(brain[3].z);
 
           // If burger seen, tell ally harvester
           driveHarvester();
@@ -1396,7 +1429,7 @@ class RedRocketLauncher extends RocketLauncher {
             Robot leader = game.getRobot((int) brain[3].x);
             if(distance(brain[0]) > 4 && (leader == null || distance(leader) < 4)) {
               right(towards(brain[0]));
-              forward(speed);
+              tryToMoveForward(speed);
             } else {
               // shoot on the target
               launchBullet(towards(brain[0]));
@@ -1404,7 +1437,7 @@ class RedRocketLauncher extends RocketLauncher {
           } else {
             // Follow leader
             heading = brain[3].y;
-            forward(brain[3].z);
+            tryToMoveForward(brain[3].z);
           }
         } else if(brain[4].z == SQUAD_LEADER){
           // Drive squad to destroy ennemy bases
@@ -1418,7 +1451,7 @@ class RedRocketLauncher extends RocketLauncher {
             // Follow the target
             if(distance(brain[0]) > 4) {
               right(towards(brain[0]));
-              forward(speed);
+              tryToMoveForward(speed);
             } else {
               // If no robot found at position given by base, reset flag
               ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
@@ -1431,12 +1464,12 @@ class RedRocketLauncher extends RocketLauncher {
               // shoot on the target
               launchBullet(towards(brain[0]));
             else
-              forward(speed);
+              tryToMoveForward(speed);
           } else {
             // Move randomly in base
             //randomMove(90f);
             heading += random(-radians(45f), radians(45f));
-            forward(0.3f);
+            tryToMoveForward(0.3f);
           }
         }
       }
@@ -1510,7 +1543,7 @@ class RedRocketLauncher extends RocketLauncher {
       sendMessage((int) brain[2].x, UPDATE_DIRECTION, new float[]{heading, speed});
       sendMessage((int) brain[2].y, UPDATE_DIRECTION, new float[]{heading, speed});
       sendMessage((int) brain[2].z, UPDATE_DIRECTION, new float[]{heading, speed});
-      forward(speed);
+      tryToMoveForward(speed);
     }
   }
 
@@ -1520,13 +1553,13 @@ class RedRocketLauncher extends RocketLauncher {
     Robot robotTarget = null;
     PVector target = null;
 
+    // Search target
+    for(int i = 0; i < typePriority.length && robotTarget == null; i++) {
+      robotTarget = (Robot) minDist(perceiveRobots(ennemy, typePriority[i]));
+    }
+
     // If no target in memory
     if(!target()) {
-      // Search target
-      for(int i = 0; i < typePriority.length && robotTarget == null; i++) {
-        robotTarget = (Robot) minDist(perceiveRobots(ennemy, typePriority[i]));
-      }
-
       if(robotTarget != null) {
         brain[0] = new PVector(robotTarget.pos.x, robotTarget.pos.y, robotTarget.breed);
         brain[4].y = 2;
@@ -1535,22 +1568,50 @@ class RedRocketLauncher extends RocketLauncher {
         if(distance(brain[0]) > 4) {
           // Move towards target
           heading = towards(brain[0]);
-          forward(speed);
+          tryToMoveForward(speed);
         } else
           hunterAttack(brain[0]);
       } else {
         // No target, move randomly
         heading += random(-radians(45f), radians(45f));
-        forward(speed);
+        tryToMoveForward(speed);
       }
     } else {
+      // If target in memory and target found
+      if(robotTarget != null) {
+        // If going to food zone, attack found target
+        if(brain[0].z == BURGER) {
+          brain[0].x = robotTarget.pos.x;
+          brain[0].y = robotTarget.pos.y;
+          brain[0].z = robotTarget.breed;
+          brain[4].y = 2;
+        } else {
+          // If helping hunter
+          int memPriority = 0;
+          int targetPriority = 0;
+
+          for(int j = 0; j < typePriority.length; j++) {
+            if(typePriority[j] == robotTarget.breed) targetPriority = j;
+            if(typePriority[j] == brain[0].z) memPriority = j;
+          }
+
+          // Stop helping cause new target with bigger priority
+          if(targetPriority < memPriority) {
+            brain[0].x = robotTarget.pos.x;
+            brain[0].y = robotTarget.pos.y;
+            brain[0].z = robotTarget.breed;
+            brain[4].y = 2;
+          }
+        }
+      }
+
       target = brain[0];
 
       // If not close enough
       if(distance(target) > 4) {
         // Move towards target
         heading = towards(target);
-        forward(speed);
+        tryToMoveForward(speed);
       } else {
         robotTarget = (Robot) minDist(perceiveRobots(ennemy, (int) brain[0].z));
 
@@ -1572,7 +1633,7 @@ class RedRocketLauncher extends RocketLauncher {
         // shoot on the target
         launchBullet(towards(target));
       else
-        forward(speed);
+        tryToMoveForward(speed);
 
       // Notify target to close hunters
       ArrayList launchers = perceiveRobots(friend, LAUNCHER);
@@ -1680,6 +1741,21 @@ class RedRocketLauncher extends RocketLauncher {
         tryToMoveForward();
       }
     }
+  }
+
+  //
+  // tryToMoveForward
+  // ================
+  // > try to move forward after having checked that no obstacle is in front
+  //
+  void tryToMoveForward(float s) {
+    // if there is an obstacle ahead, rotate randomly
+    if (!freeAhead(s))
+      right(random(360));
+
+    // if there is no obstacle ahead, move forward at full speed
+    if (freeAhead(s))
+      forward(s);
   }
 
   //
