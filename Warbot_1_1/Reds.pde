@@ -138,21 +138,23 @@ class RedBase extends Base {
       }
     } */
 
-    // TODO : définir une stratégie de déploiment (priorité sur les actions / quand faire quoi)
 
-    /* 
-     * Idée : 
-     * Toujours avoir de l'énérgie pour pouvoir recharger les robots => avoir pas mal de harmester pour ca
-     * Au début on envois quelques explorers qui cherche les bases adverses et reviennent a la base pour donner l'info
-     * Une fois cela fait on envoit une squad depuis chaque base pour detruire une base.
-     * Ensuite il rentre se recharger avant de repartir faire la meme chose sur la seconde base.
-     * 
-     * En parallèle : on crée des harvester et des rocket launcher (hunter) pour attaquer les adversaires et récolter des ressources
-     * on crée aussi occasionnelement des explorers qui peuvent transmettre de l'info au autres robots 
-     *
-     * => eventuellement gérer ca avec des probas si plus d'un certain montant de ressource ?
-     */
+    // if ennemy rocket launcher in the area of perception
+    Robot bob = (Robot)minDist(perceiveRobots(ennemy, LAUNCHER));
+    if (bob != null) {
+      if((int)random(10) == 0 && brain[1].y == 0){ // Si la base est attaqué on a 1 chance sur 10 de créer un défenseur
+        brain[1].y = 7;
+      }
+      heading = towards(bob);
+      // launch a faf if no friend robot on the trajectory...
+      if (perceiveRobotsInCone(friend, heading) == null)
+        launchFaf(bob);
 
+      // Inform defenders
+      if(brain[0].x != -1) informAboutTarget((int) brain[0].x, bob);
+      if(brain[0].y != -1) informAboutTarget((int) brain[0].y, bob);
+      if(brain[0].z != -1) informAboutTarget((int) brain[0].z, bob);
+    }
 
 
     if(brain[2].x != -1){ // At least one enemy base discover
@@ -160,20 +162,8 @@ class RedBase extends Base {
         brain[1].y = 1;
       }
     }
-    /*if(energy > 2*1000+ launcherCost+harvesterCost && brain[1].y == 0){
-      brain[1].y = 2;
-    }*/
-    /*if(energy > 1000 + harvesterCost && brain[1].y == 0) {
-      brain[1].y = 4;
-    }*/
-
-    /*if(energy > 1000 + explorerCost && brain[1].y == 0) {
-      brain[1].y = 5;
-    }*/
-    
 
     // Generate random robot 
-    // TODO : Test and eventually modify 12000 ?
     if (energy > 12000 && brain[1].y == 0) {
       // if no robot in the pipe and enough energy
       int num = (int)random(10);
@@ -215,7 +205,11 @@ class RedBase extends Base {
     }
     else if(brain[1].y == 8){
       if(brain[2].x == -1 || brain[2].y == -1 || brain[2].z == -1 || brain[3].x == -1){
-        if (energy > 30000) {
+        if(brain[1].x == 0){
+          // creates a explorer to discover the map and find base
+          newExplorer();
+          brain[1].x = 1;
+        } else if (energy > 30000) {
           // if no robot in the pipe and enough energy
           int num = (int)random(10);
           if (num <= 3)
@@ -227,24 +221,12 @@ class RedBase extends Base {
         }
       }
       else{
+        brain[1].x = 0;
         brain[1].y = 1;
       }
     }
     /*else if(brain[1].y == 2){
       createHarvesterSquad();
-    }*/
-    
-      /*else if (energy > 12000) {
-      // if no robot in the pipe and enough energy 
-      if ((int)random(2) == 0)
-        // creates a new harvester with 50% chance
-        brain[5].x++;
-      else if ((int)random(2) == 0)
-        // creates a new rocket launcher with 25% chance
-        brain[5].y++;
-      else
-        // creates a new explorer with 25% chance
-        brain[5].z++;
     }*/
 
     // creates new bullets and fafs if the stock is low and enought energy
@@ -252,23 +234,6 @@ class RedBase extends Base {
       newBullets(50);
     if ((bullets < 10) && (energy > 1000))
       newFafs(10);
-
-    // if ennemy rocket launcher in the area of perception
-    Robot bob = (Robot)minDist(perceiveRobots(ennemy, LAUNCHER));
-    if (bob != null) {
-      if((int)random(10) == 0 && brain[1].y == 0){ // Si la base est attaqué on a 1 chance sur 10 de créer un défenseur
-        brain[1].y = 7;
-      }
-      heading = towards(bob);
-      // launch a faf if no friend robot on the trajectory...
-      if (perceiveRobotsInCone(friend, heading) == null)
-        launchFaf(bob);
-
-      // Inform defenders
-      if(brain[0].x != -1) informAboutTarget((int) brain[0].x, bob);
-      if(brain[0].y != -1) informAboutTarget((int) brain[0].y, bob);
-      if(brain[0].z != -1) informAboutTarget((int) brain[0].z, bob);
-    }
   }
 
   void createHarvesterSquad(){
