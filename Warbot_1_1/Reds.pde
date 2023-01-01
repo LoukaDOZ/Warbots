@@ -480,21 +480,21 @@ class RedBase extends Base {
 
     if(!alive[0]) {
       brain[0].x = -1;
-      if(newHarvester()){
+      if(newRocketLauncher()){
         searchRocketLauncher();
         brain[1].y = 0;
       }
     }
     else if(!alive[1]) {
       brain[0].y = -1;
-      if(newHarvester()){
+      if(newRocketLauncher()){
         searchRocketLauncher();
         brain[1].y = 0;
       }
     }
     else if(!alive[2]) {
       brain[0].z = -1;
-      if(newHarvester()){
+      if(newRocketLauncher()){
         searchRocketLauncher();
         brain[1].y = 0;
       }
