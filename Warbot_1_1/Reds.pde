@@ -173,15 +173,15 @@ class RedBase extends Base {
     
 
     // Generate random robot 
-    // TODO : Test and eventually modify 1200 ?
+    // TODO : Test and eventually modify 12000 ?
     if (energy > 12000 && brain[1].y == 0) {
       // if no robot in the pipe and enough energy
       int num = (int)random(10);
-      if (num == 1)
+      if (num == 0)
         // creates a new explorer with 10% chance
         brain[1].y = 5;
-      else if (num == 2)
-        // creates a new explorer with 10% chance
+      else if (num == 1)
+        // creates a new hunter with 10% chance
         brain[1].y = 3;
       else
         // creates a new harvester with 80% chance
@@ -215,16 +215,20 @@ class RedBase extends Base {
     }
     else if(brain[1].y == 8){
       if(brain[2].x == -1 || brain[2].y == -1 || brain[2].z == -1 || brain[3].x == -1){
-        newExplorer();
-        newHarvester();
-      }
-      else{
-        for(int i = 0 ; i < 4 ; i++){
-          newHarvester();
+        if (energy > 30000) {
+          // if no robot in the pipe and enough energy
+          int num = (int)random(10);
+          if (num <= 3)
+            // creates a new explorer with 40% chance
+            newExplorer();
+          else
+            // creates a new harvester with 60% chance
+            newHarvester();
         }
       }
-
-      brain[1].y = 0;
+      else{
+        brain[1].y = 1;
+      }
     }
     /*else if(brain[1].y == 2){
       createHarvesterSquad();
@@ -252,6 +256,9 @@ class RedBase extends Base {
     // if ennemy rocket launcher in the area of perception
     Robot bob = (Robot)minDist(perceiveRobots(ennemy, LAUNCHER));
     if (bob != null) {
+      if((int)random(10) == 0 && brain[1].y == 0){ // Si la base est attaqué on a 1 chance sur 10 de créer un défenseur
+        brain[1].y = 7;
+      }
       heading = towards(bob);
       // launch a faf if no friend robot on the trajectory...
       if (perceiveRobotsInCone(friend, heading) == null)
@@ -319,7 +326,7 @@ class RedBase extends Base {
     } 
     else {
       brain[1].x = 0;
-      brain[1].y = 4;//TODO
+      brain[1].y = 0;
       brain[1].z = 0;
     }
   }
@@ -801,7 +808,7 @@ class RedExplorer extends Explorer {
   void baitEnnemies() {
     ArrayList ennemies;
     PVector baitPos = new PVector(random(255), random(255), random(255));
-    Harvester baitHarvester = (Harvester)oneOf(perceiveRobots(ennemy, HARVESTER));
+    Robot baitRobot = (Robot) oneOf(perceiveRobots(ennemy));
 
     ennemies = perceiveRobots(ennemy, EXPLORER);
     if(ennemies != null) {
@@ -817,11 +824,11 @@ class RedExplorer extends Explorer {
       }
     }
     
-    if(baitHarvester != null){
+    if(baitRobot != null){
       ennemies = perceiveRobots(ennemy, LAUNCHER);
       if(ennemies != null) {
         for(int i = 0; i < ennemies.size(); i++) {
-          informAboutTarget((RocketLauncher) ennemies.get(i), baitHarvester);
+          informAboutTarget((RocketLauncher) ennemies.get(i), baitRobot);
         }
       }
     }
