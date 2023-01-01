@@ -1385,6 +1385,9 @@ class RedRocketLauncher extends RocketLauncher {
     brain[3].z = -1;
     brain[1].x = -1;
     brain[1].y = -1;
+    // Which bases can't be found at cordinates (probably destroyed)
+    // 0: none, 1: brain[3], 2: brain[1], 3: both
+    brain[1].z = 0;
   }
 
   //
@@ -1474,15 +1477,16 @@ class RedRocketLauncher extends RocketLauncher {
               // If no robot found at position given by base, reset flag
               ArrayList robots = perceiveRobots(ennemy, LAUNCHER);
               if(robots == null || robots.size() == 0)
-                brain[4].y = 0;
-            }
+                // Find new target
+                selectTarget();
 
-            // if no friend robot on the trajectory...
-            if (perceiveRobotsInCone(friend, towards(brain[0])) == null)
-              // shoot on the target
-              launchBullet(towards(brain[0]));
-            else
-              tryToMoveForward(speed);
+                // if no friend robot on the trajectory...
+                if (perceiveRobotsInCone(friend, towards(brain[0])) == null)
+                  // shoot on the target
+                  launchBullet(towards(brain[0]));
+                else
+                  tryToMoveForward(speed);
+            }
           } else {
             // Move randomly in base
             //randomMove(90f);
@@ -1498,11 +1502,11 @@ class RedRocketLauncher extends RocketLauncher {
     // Go to ennemy base
     PVector target = null;
     boolean memBase = true;
-    boolean move = true;
+    boolean move = false;
 
-    if(brain[1].x != -1)
+    if(brain[1].x != -1 && brain[1].z == 0 || brain[1].z == 1)
       target = new PVector(brain[1].x, brain[1].y);
-    else if(brain[3].y != -1) {
+    else if(brain[3].y != -1 && brain[1].z == 0 || brain[1].z == 2) {
       target = new PVector(brain[3].y, brain[3].z);
       memBase = false;
     }
@@ -1512,19 +1516,23 @@ class RedRocketLauncher extends RocketLauncher {
       if(distance(target) > 4) {
         // Move towards base
         heading = towards(target);
+        move = true;
       } else {
-        move = false;
         Base targetBase = (Base) minDist(perceiveRobots(ennemy, BASE));
 
         if(targetBase == null) {
           // No base found, is it dead ?
-          // Remove base pos from memory
+          // Don't care this base now
           if(memBase) {
-            brain[1].x = -1;
-            brain[1].y = -1;
+            if(brain[1].z == 0)
+              brain[1].z = 2; // this one destroyed
+            else if(brain[1].z == 1)
+              brain[1].z = 3; // Both destroyed
           } else {
-            brain[3].y = -1;
-            brain[3].z = -1;
+            if(brain[1].z == 0)
+              brain[1].z = 1; // this one destroyed
+            else if(brain[1].z == 2)
+              brain[1].z = 3; // Both destroyed
           }
 
           if(brain[4].y == 2) {
@@ -1542,18 +1550,13 @@ class RedRocketLauncher extends RocketLauncher {
         }
       }
     } else {
-      // No base in memory, move randomly
-      heading += random(-radians(45f), radians(45f));
+      // No base in memory, become hunters
+      brain[4].z = HUNTER_LEADER;
+      brain[4].y = 0;
 
-      // if target identified
-      if (target()) {
-        // shoot on the target
-        launchBullet(towards(brain[0]));
-        sendMessage((int) brain[2].x, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
-        sendMessage((int) brain[2].y, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
-        sendMessage((int) brain[2].z, INFORM_ABOUT_TARGET, new float[]{brain[0].x, brain[0].y});
-        brain[4].y = 2;
-      }
+      sendMessage((int) brain[2].x, PROMUTE_HUNTER_LEADER, EMPTY_ARGS);
+      sendMessage((int) brain[2].y, PROMUTE_HUNTER_LEADER, EMPTY_ARGS);
+      sendMessage((int) brain[2].z, PROMUTE_HUNTER_LEADER, EMPTY_ARGS);
     }
 
     if(move) {
@@ -1739,7 +1742,7 @@ class RedRocketLauncher extends RocketLauncher {
       float dist = distance(bob);
 
       if (dist <= 2) {
-        if(looseTeam() && brain[4].z != HUNTER_LEADER) {
+        if(brain[4].z != HUNTER_LEADER && looseTeam()) {
           brain[4].z = NO_ROLE;
           brain[4].y = 0;
         }
@@ -1869,6 +1872,11 @@ class RedRocketLauncher extends RocketLauncher {
         //PROMUTE TO HUNTER LEADER
         brain[4].z = HUNTER_LEADER;
       }
+      else if (brain[4].z == SQUAD_SOLDIER && msg.type == PROMUTE_HUNTER_LEADER && msg.alice == brain[3].x){
+        //SQUAD SOLDIER BEACOME HUNTER
+        brain[4].z = HUNTER_LEADER;
+        brain[4].y = 0;
+      }
       else if( msg.type == INFORM_ABOUT_XYTARGET) {
         if(brain[4].z == HUNTER_LEADER && msg.args.length >= 3) {
           // If has target, check if it is worth to help transmitter
@@ -1915,7 +1923,7 @@ class RedRocketLauncher extends RocketLauncher {
           brain[4].y = 2;
         } else if(brain[4].z == SQUAD_LEADER && msg.args[2] == BASE) {
           // Get base pos from explorers if missing
-          if(brain[1].x == -1) {
+          if(brain[1].x == -1 && (brain[3].y != msg.args[0] || brain[3].z != msg.args[1])) {
             brain[1].x = msg.args[0];
             brain[1].y = msg.args[1];
           } else if(brain[3].y == -1 && (brain[1].x != msg.args[0] || brain[1].y != msg.args[1])) {
