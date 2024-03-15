@@ -4,7 +4,7 @@ AI project where warbots must communicate to form groups and apply strategies to
 
 Authors : Guillaume Descroix - Louka Doz - Céline Laguillon
 
-![capture](Rapport/capture1.png)
+![capture1](https://github.com/LoukaDOZ/Warbots/assets/46566140/318e2954-3b06-4d10-b333-a68fd87667a9)
 
 ## Usage
 
