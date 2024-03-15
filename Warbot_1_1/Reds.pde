@@ -763,8 +763,7 @@ class RedExplorer extends Explorer {
 
         // Also give the newest food pos info for hunters to defend it
         if(burgerPos != null) {
-          sendMessage(
-              launcher, INFORM_ABOUT_XYTARGET, new float[]{burgerPos.x, burgerPos.y, BURGER});
+          sendMessage(launcher, INFORM_ABOUT_XYTARGET, new float[]{burgerPos.x, burgerPos.y, BURGER});
         }
       }
     }
@@ -1469,9 +1468,9 @@ class RedRocketLauncher extends RocketLauncher {
     boolean memBase = true;
     boolean move = false;
 
-    if(brain[1].x != -1 && brain[1].z == 0 || brain[1].z == 1)
+    if(brain[1].x != -1 && (brain[1].z == 0 || brain[1].z == 1))
       target = new PVector(brain[1].x, brain[1].y);
-    else if(brain[3].y != -1 && brain[1].z == 0 || brain[1].z == 2) {
+    else if(brain[3].y != -1 && (brain[1].z == 0 || brain[1].z == 2)) {
       target = new PVector(brain[3].y, brain[3].z);
       memBase = false;
     }

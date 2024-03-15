@@ -1,13 +1,21 @@
 # Warbots
 
-Auteurs : Guillaume Descroix - Louka Doz - Céline Laguillon
+AI project where warbots must communicate to form groups and apply strategies to destroy enemy bases. This project is part of our course on intelligent agents at ENSIIE.
+
+Authors : Guillaume Descroix - Louka Doz - Céline Laguillon
 
 ![capture](Rapport/capture1.png)
 
-## Informations 
+## Usage
 
-Ce projet s'inscrit dans le cadre de notre cours sur les agents inteligents à l'ENSIIE.
+| Command          | Description                  |
+| ---------------- | ---------------------------- |
+| `make install`   | Install Processing locally   |
+| `make uninstall` | Uninstall Processing locally |
+| `make run`       | Run program                  |
 
-## Stratégie
+## Strategy
 
-TODO
+- [Rules of the project (fr)](Warbot_1_1/doc/Rules_v3.0.3.pdf)
+- [Bots behaviour source code (goal of the project)](Warbot_1_1/Reds.pde)
+- [Strategy (fr)](rapport/)
